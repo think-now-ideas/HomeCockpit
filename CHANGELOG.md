@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.1 – 08.11.2026
+- Öffnen einer Karte im HA-Karteneditor zählt nicht mehr als „ungespeicherte Änderung“
+- Releases werden automatisch angelegt, sobald eine neue Version auf GitHub liegt
+
 ## 0.3.0 – 08.11.2026
 - Feste Seiten im Editor bearbeitbar: jede Seite in der Gliederung, Karten verschieben (auch zwischen Abschnitten), duplizieren, löschen, Abschnitte anlegen/löschen, Titel/Pfad/Symbol ändern
 - Karte bearbeiten: grafischer Karteneditor von Home Assistant (wenn verfügbar), sonst als Text (JSON)

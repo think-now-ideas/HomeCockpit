@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.3.0 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.3.1 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
  *
  * Neu in 0.3: feste Seiten im Editor bearbeitbar (Karten verschieben, bearbeiten, hinzufügen),
@@ -38,7 +38,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.0";
+const VERSION = "0.3.1";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -1313,10 +1313,17 @@ class HomeCockpitEditor extends HTMLElement {
         ed.hass = this._hass;
         ed.lovelace = { config: { views: [] }, editMode: true };
         ed.value = clone(card);
+        // Der HA-Editor „räumt“ die Karte beim Öffnen auf und meldet das als Änderung.
+        // Diese erste Meldung kurz nach dem Öffnen zählt nicht als Änderung des Benutzers.
+        const openedAt = Date.now();
+        let first = true;
         ed.addEventListener("config-changed", (ev) => {
           ev.stopPropagation();
           const conf = ev.detail && ev.detail.config;
-          if (conf && typeof conf === "object" && conf.type) this._replaceCard(conf);
+          if (!conf || typeof conf !== "object" || !conf.type) return;
+          const quiet = first && Date.now() - openedAt < 2000;
+          first = false;
+          this._replaceCard(conf, quiet);
         });
         box.innerHTML = "";
         box.appendChild(ed);
@@ -1333,10 +1340,12 @@ class HomeCockpitEditor extends HTMLElement {
     box.innerHTML = `<textarea id="cardjson" style="min-height:260px">${esc(JSON.stringify(card, null, 2))}</textarea>
       <div class="row" style="margin-top:6px"><button class="b pri" data-act="applyJson">Übernehmen</button><span class="small" id="jsonerr">Format: JSON</span></div>`;
   }
-  _replaceCard(conf) {
+  _replaceCard(conf, quiet = false) {
     const s = this._sel, v = this._hview();
     const ct = this._containers(v)[s.sec];
+    if (JSON.stringify(ct.cards[s.c]) === JSON.stringify(conf)) return; // nichts geändert
     ct.cards[s.c] = conf;
+    if (quiet) return; // nur aufgeräumt – kein „ungespeichert“
     this._setDirty();
     clearTimeout(this._pt); this._pt = setTimeout(() => { this._renderPreview(); this._renderTree(); }, 400);
   }

@@ -1,0 +1,32 @@
+# Legt automatisch ein GitHub-Release an, sobald eine neue Version (const VERSION in der JS-Datei)
+# auf main landet. HACS zeigt dann echte Versionsnummern als Update an.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: ["dist/home-cockpit-strategy.js"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version aus der Datei lesen
+        id: v
+        run: |
+          V=$(grep -oP 'const VERSION = "\K[0-9]+\.[0-9]+\.[0-9]+' dist/home-cockpit-strategy.js)
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+      - name: Release anlegen, falls es diese Version noch nicht gibt
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          if [ -z "$VERSION" ]; then echo "Keine Version gefunden"; exit 1; fi
+          if gh release view "v$VERSION" >/dev/null 2>&1; then echo "v$VERSION gibt es schon"; exit 0; fi
+          NOTES=$(awk -v v="## $VERSION" 'index($0, v)==1 {f=1; next} /^## / && f {exit} f' CHANGELOG.md)
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "HomeCockpit $VERSION" --notes "${NOTES:-Siehe CHANGELOG.md}"

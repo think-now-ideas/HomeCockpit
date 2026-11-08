@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.3.2 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.3.3 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
  *
  * Neu in 0.3: feste Seiten im Editor bearbeitbar (Karten verschieben, bearbeiten, hinzufügen),
@@ -38,13 +38,14 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.2";
+const VERSION = "0.3.3";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
 // Kleine Helfer
 // ---------------------------------------------------------------------------
 
+const clone = (o) => JSON.parse(JSON.stringify(o ?? null));
 const asList = (v) => (v === undefined || v === null ? [] : Array.isArray(v) ? v : [v]);
 const lower = (s) => String(s ?? "").toLowerCase();
 
@@ -500,6 +501,31 @@ function roomBlocks(config) {
 
 const BLOCK_CARD = "custom:home-cockpit-block";
 
+/**
+ * Verknüpfte Seite: { link: { dashboard: "internet-status", path: "internet" }, title?, path?, icon?, subview? }
+ * Die Seite wird bei jedem Laden live aus dem anderen Dashboard geholt – gepflegt wird sie dort.
+ */
+const _linkCache = new Map();
+async function resolveLinked(v, hass) {
+  if (!v || !v.link) return v;
+  const key = String(v.link.dashboard ?? "");
+  let conf = _linkCache.get(key);
+  if (!conf || Date.now() - conf.at > 30_000) {
+    try { conf = { at: Date.now(), data: await hass.callWS({ type: "lovelace/config", url_path: v.link.dashboard || null }) }; }
+    catch (e) { conf = { at: Date.now(), data: null }; }
+    _linkCache.set(key, conf);
+  }
+  const views = conf.data && Array.isArray(conf.data.views) ? conf.data.views : [];
+  const src = views.find((x) => x.path === v.link.path) || views[v.link.index ?? -1];
+  const meta = { title: v.title, path: v.path, icon: v.icon, ...(v.subview !== undefined ? { subview: v.subview } : {}) };
+  Object.keys(meta).forEach((k) => meta[k] === undefined && delete meta[k]);
+  if (!src) {
+    return { ...meta, type: "sections", sections: [{ type: "grid", cards: [{ type: "markdown",
+      content: `⚠️ Verknüpfte Seite **${v.link.path}** im Dashboard **${v.link.dashboard || "Übersicht"}** nicht gefunden.` }] }] };
+  }
+  return { ...clone(src), ...meta };
+}
+
 /** Ersetzt in einer festen Seite jede Baustein-Karte durch die erzeugten Karten. */
 async function expandHandView(view, config, hass, ctx) {
   if (!JSON.stringify(view).includes(BLOCK_CARD)) return view; // schnell: nichts zu tun
@@ -533,7 +559,7 @@ class HomeCockpitDashboardStrategy extends HTMLElement {
 
     // 1. Handseiten vorne (Baustein-Karten darin werden erzeugt)
     const hctx = { hass, labels: await loadLabels(hass) };
-    for (const v of asList(config.views_before)) views.push(await expandHandView(v, config, hass, hctx));
+    for (const v of asList(config.views_before)) views.push(await expandHandView(await resolveLinked(v, hass), config, hass, hctx));
 
     // 2. Ohne eigene Startseite: einfache Übersicht mit Etagenknöpfen
     if (!asList(config.views_before).length) {
@@ -573,7 +599,7 @@ class HomeCockpitDashboardStrategy extends HTMLElement {
     asList(config.pages).forEach((pg, i) => { if (pg.position !== "end") views.push(pageView(pg, i)); });
 
     // 5. Handseiten hinten
-    for (const v of asList(config.views_after)) views.push(await expandHandView(v, config, hass, hctx));
+    for (const v of asList(config.views_after)) views.push(await expandHandView(await resolveLinked(v, hass), config, hass, hctx));
     asList(config.pages).forEach((pg, i) => { if (pg.position === "end") views.push(pageView(pg, i)); });
 
     // 6. Nicht zugeordnet
@@ -840,13 +866,15 @@ class HomeCockpitUnassignedViewStrategy extends HTMLElement {
 // Es werden keine externen Dateien geladen und keine Daten nach außen geschickt.
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const clone = (o) => JSON.parse(JSON.stringify(o ?? null));
 const listText = (v) => asList(v).join(", ");
 /** „light, switch“ → ["light","switch"], „light“ → "light", „“ → undefined */
 const parseList = (t) => {
   const a = String(t || "").split(",").map((x) => x.trim()).filter(Boolean);
   return a.length === 0 ? undefined : a.length === 1 ? a[0] : a;
 };
+
+// Kurze Auswahl häufiger Symbole (Ersatz, falls die HA-Symbolsuche nicht ladbar ist)
+const ICON_CHOICES = ["mdi:home", "mdi:home-outline", "mdi:home-floor-0", "mdi:home-floor-1", "mdi:home-floor-2", "mdi:home-floor-negative-1", "mdi:home-roof", "mdi:stairs", "mdi:sofa", "mdi:bed", "mdi:bed-king", "mdi:silverware-fork-knife", "mdi:countertop", "mdi:fridge", "mdi:shower", "mdi:shower-head", "mdi:toilet", "mdi:paper-roll", "mdi:wardrobe", "mdi:desk", "mdi:account", "mdi:account-child", "mdi:door", "mdi:door-open", "mdi:garage", "mdi:car", "mdi:gate", "mdi:fence", "mdi:flower", "mdi:tree", "mdi:sprout", "mdi:water", "mdi:sprinkler", "mdi:table-furniture", "mdi:balcony", "mdi:radiator", "mdi:thermostat", "mdi:thermometer", "mdi:water-percent", "mdi:fire", "mdi:snowflake", "mdi:fan", "mdi:air-conditioner", "mdi:lightbulb", "mdi:lightbulb-group", "mdi:lamp", "mdi:ceiling-light", "mdi:led-strip", "mdi:power-socket-de", "mdi:power-plug", "mdi:flash", "mdi:lightning-bolt", "mdi:solar-power", "mdi:battery-50", "mdi:battery-charging", "mdi:meter-electric", "mdi:meter-gas", "mdi:gas-burner", "mdi:water-boiler", "mdi:washing-machine", "mdi:tumble-dryer", "mdi:dishwasher", "mdi:television", "mdi:speaker", "mdi:music", "mdi:radio", "mdi:cctv", "mdi:camera", "mdi:bell", "mdi:doorbell", "mdi:lock", "mdi:shield-home", "mdi:alarm-light", "mdi:window-shutter", "mdi:blinds", "mdi:window-open-variant", "mdi:web", "mdi:wifi", "mdi:router-network", "mdi:lan", "mdi:server", "mdi:trash-can", "mdi:recycle", "mdi:calendar", "mdi:weather-partly-cloudy", "mdi:weather-rainy", "mdi:chart-line", "mdi:chart-bar", "mdi:information", "mdi:cog", "mdi:dots-horizontal", "mdi:view-dashboard"];
 
 const CRITERIA = [
   ["domain", "Domäne", "light, switch, cover, climate …"],
@@ -917,6 +945,7 @@ table{border-collapse:collapse;width:100%} td,th{padding:6px;border-top:1px soli
 .status{font-size:13px;color:var(--hc-sub)}
 .chip{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;border:1px solid var(--hc-line);font-size:12px}
 @media (max-width:1100px){.prev{max-width:none}.tree{max-width:none}}
+.icongrid[hidden]{display:none!important}
 `;
 
 class HomeCockpitEditor extends HTMLElement {
@@ -1031,7 +1060,7 @@ class HomeCockpitEditor extends HTMLElement {
   // ---- feste Seiten: Behälter = Abschnitte (sections) oder eine Kartenliste (masonry)
   _hview(s = this._sel) { return asList(this._cfg[s.key])[s.v]; }
   _containers(v) {
-    if (!v) return [];
+    if (!v || v.link) return [];
     if (Array.isArray(v.sections)) return v.sections;
     v.cards = asList(v.cards);
     return [v];
@@ -1070,7 +1099,7 @@ class HomeCockpitEditor extends HTMLElement {
     for (const key of ["views_before", "views_after"]) {
       asList(c[key]).forEach((v, vi) => {
         const isOn = (s.kind === "hpage" || s.kind === "hcard") && s.key === key && s.v === vi;
-        h += item(v.title || v.path || "Seite", "sel", `data-kind="hpage" data-key="${key}" data-v="${vi}"`, " ind" + (isOn ? " on" : ""), `<span class="dot fix"></span>`);
+        h += item((v.link ? "🔗 " : "") + (v.title || v.path || "Seite"), "sel", `data-kind="hpage" data-key="${key}" data-v="${vi}"`, " ind" + (isOn ? " on" : ""), `<span class="dot fix"></span>`);
       });
     }
     h += `<div class="grp">↻ Etage <span class="small">je Etage</span></div>`;
@@ -1114,6 +1143,7 @@ class HomeCockpitEditor extends HTMLElement {
     else if (k === "import") { m.innerHTML = `<div class="lbl">Aus Bestand übernehmen</div><div>Lade Dashboards …</div>`; this._importForm(m); }
     else if (k === "unassigned") { m.innerHTML = `<div class="lbl">Nicht zugeordnet</div><div>Berechne …</div>`; this._unassignedForm(m); }
     else if (k === "raw") m.innerHTML = this._rawForm();
+    if (m.querySelector(".iconslot")) this._upgradeIconPickers();
   }
 
   _ruleGroups(b, key) {
@@ -1203,7 +1233,7 @@ class HomeCockpitEditor extends HTMLElement {
       <div class="hint">Eine Seite aus Bausteinen – z. B. „Heizung“ mit allen Thermostaten nach Räumen, „Garten“ mit Bewässerung und Bodenfeuchte.</div>
       <div class="row"><label for="p-title">Titel</label><input id="p-title" data-pfield="title" value="${esc(pg.title)}"></div>
       <div class="row"><label for="p-path">Pfad</label><input id="p-path" data-pfield="path" value="${esc(pg.path || "")}" placeholder="${esc(slug(pg.title))}"></div>
-      <div class="row"><label for="p-icon">Symbol</label><input id="p-icon" data-pfield="icon" value="${esc(pg.icon || "")}" placeholder="mdi:radiator"></div>
+      ${this._iconField("pfield", pg.icon)}
       <div class="row"><label for="p-pos">Position</label><select id="p-pos" data-pfield="position">
         <option value="" ${pg.position !== "end" ? "selected" : ""}>nach den Etagen</option>
         <option value="end" ${pg.position === "end" ? "selected" : ""}>ganz hinten</option></select></div>
@@ -1245,6 +1275,17 @@ class HomeCockpitEditor extends HTMLElement {
   _hpageForm() {
     const v = this._hview(), s = this._sel;
     if (!v) return `<div>Seite nicht gefunden.</div>`;
+    if (v.link) {
+      return `<div class="row" style="justify-content:space-between"><div><div class="small">Verknüpfte Seite · ${s.key === "views_before" ? "vorne" : "hinten"}</div>
+          <div style="font-size:20px;font-weight:700">🔗 ${esc(v.title || v.path)}</div></div>
+          <button class="b mini danger" data-act="hpageDel">Seite entfernen</button></div>
+        <div class="hint">Diese Seite wird bei jedem Öffnen <b>live</b> aus dem Dashboard <b>${esc(v.link.dashboard || "Übersicht")}</b> (Seite <code>${esc(v.link.path)}</code>) geholt. Ändern also dort – hier erscheint es automatisch. Pop-ups (#…) funktionieren weiter.</div>
+        <div class="row"><label for="hp-t">Titel</label><input id="hp-t" data-hpfield="title" value="${esc(v.title || "")}"></div>
+        <div class="row"><label for="hp-p">Pfad</label><input id="hp-p" data-hpfield="path" value="${esc(v.path || "")}"></div>
+        ${this._iconField("hpfield", v.icon)}
+        <div class="row"><label><input type="checkbox" data-hpfield="subview" ${v.subview ? "checked" : ""} style="width:auto;min-height:0"> Unterseite (kein Tab)</label></div>
+        <div class="row"><button class="b" data-act="linkToCopy">In feste Seite umwandeln (Kopie zum Bearbeiten)</button></div>`;
+    }
     const conts = this._containers(v);
     const isSections = Array.isArray(v.sections);
     let rows = "";
@@ -1268,7 +1309,7 @@ class HomeCockpitEditor extends HTMLElement {
       <div class="hint">Jede Karte dieser Seite. <b>Ocker</b> = feste Karte (genau so, wie du sie gebaut hast), <b>blau</b> = automatischer Baustein. Eine feste Karte kannst du mit „Automatisch machen“ für alle passenden Geräte verwenden.</div>
       <div class="row"><label for="hp-t">Titel</label><input id="hp-t" data-hpfield="title" value="${esc(v.title || "")}"></div>
       <div class="row"><label for="hp-p">Pfad</label><input id="hp-p" data-hpfield="path" value="${esc(v.path || "")}"></div>
-      <div class="row"><label for="hp-i">Symbol</label><input id="hp-i" data-hpfield="icon" value="${esc(v.icon || "")}" placeholder="mdi:home"></div>
+      ${this._iconField("hpfield", v.icon)}
       <div class="row"><label><input type="checkbox" data-hpfield="subview" ${v.subview ? "checked" : ""} style="width:auto;min-height:0"> Unterseite (kein Tab)</label></div>
       ${rows || `<div class="small">Keine Karten.</div>`}
       ${isSections ? `<div class="row" style="margin-top:8px"><button class="b mini" data-act="hsecAdd">+ Abschnitt</button></div>` : ""}
@@ -1292,6 +1333,49 @@ class HomeCockpitEditor extends HTMLElement {
       <div id="cardedit"><div class="small">Karteneditor lädt …</div></div>`;
   }
 
+  // ---- Symbol-Auswahl: HA-Symbolauswahl (mit Suche) wenn vorhanden, sonst eigene Liste mit Vorschau
+  _iconField(kind, value) {
+    return `<div class="row" style="align-items:flex-start"><label>Symbol</label>
+      <div class="iconslot" data-kind="${kind}" style="flex:1 1 220px;min-width:0">
+        <div class="row" style="flex-wrap:nowrap"><span class="iconpv" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;border:1px solid var(--hc-line);border-radius:9px;flex:none"><ha-icon icon="${esc(value || "mdi:help-circle-outline")}"></ha-icon></span>
+        <input data-${kind}="icon" value="${esc(value || "")}" placeholder="mdi:home" style="flex:1"><button class="b mini" data-act="iconList">Auswahl</button></div>
+        <div class="icongrid" hidden style="display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;margin-top:8px;max-height:220px;overflow:auto"></div>
+      </div></div>`;
+  }
+  async _upgradeIconPickers() {
+    const slots = this._root.querySelectorAll(".iconslot");
+    if (!slots.length) return;
+    await this._loadHaEditors();
+    if (!customElements.get("ha-icon-picker")) return; // eigene Liste bleibt
+    slots.forEach((slot) => {
+      const kind = slot.dataset.kind, input = slot.querySelector("input");
+      const p = document.createElement("ha-icon-picker");
+      p.hass = this._hass; p.value = input.value; p.label = "Symbol suchen";
+      p.style.flex = "1";
+      p.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation(); input.value = ev.detail.value || "";
+        input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+      });
+      slot.innerHTML = ""; slot.appendChild(p); slot.appendChild(input); input.hidden = true;
+    });
+  }
+  /** Lädt HA-Editor-Bausteine (Karteneditor, Symbolauswahl) über die Editoren von Stapel- und Kachelkarte. */
+  async _loadHaEditors() {
+    if (this._haEdLoaded) return this._haEdLoaded;
+    this._haEdLoaded = (async () => {
+      try {
+        if (!window.loadCardHelpers) return;
+        const h = await window.loadCardHelpers();
+        for (const conf of [{ type: "vertical-stack", cards: [] }, { type: "entities", entities: [] }]) {
+          const el = await h.createCardElement(conf);
+          if (el && el.constructor && el.constructor.getConfigElement) await el.constructor.getConfigElement();
+        }
+        await Promise.race([customElements.whenDefined("hui-card-element-editor"), new Promise((r) => setTimeout(r, 3000))]);
+      } catch (e) { console.warn(LOG, "HA-Editoren nicht ladbar", e); }
+    })();
+    return this._haEdLoaded;
+  }
+
   /** Versucht den grafischen Karteneditor von HA; sonst Textfeld (JSON). */
   async _mountCardEditor() {
     const box = this._root.querySelector("#cardedit");
@@ -1300,13 +1384,7 @@ class HomeCockpitEditor extends HTMLElement {
     const token = (this._edToken = (this._edToken || 0) + 1);
     let ok = false;
     try {
-      if (!customElements.get("hui-card-element-editor") && window.loadCardHelpers) {
-        // Trick: der Stapel-Editor von HA lädt den allgemeinen Karteneditor mit
-        const h = await window.loadCardHelpers();
-        const stack = await h.createCardElement({ type: "vertical-stack", cards: [] });
-        if (stack && stack.constructor && stack.constructor.getConfigElement) await stack.constructor.getConfigElement();
-        await Promise.race([customElements.whenDefined("hui-card-element-editor"), new Promise((r) => setTimeout(r, 3000))]);
-      }
+      if (!customElements.get("hui-card-element-editor")) await this._loadHaEditors();
       if (token !== this._edToken) return;
       if (customElements.get("hui-card-element-editor")) {
         const ed = document.createElement("hui-card-element-editor");
@@ -1445,7 +1523,7 @@ class HomeCockpitEditor extends HTMLElement {
       const conf = await this._loadDashConfig(imp.url || null);
       imp.rows = this._classifyViews(conf);
     }
-    const sel = (r, i) => `<select data-imp="${i}">${[["hand", "als Handseite übernehmen"], ["gen", "wird generiert (weglassen)"], ["skip", "weglassen"]]
+    const sel = (r, i) => `<select data-imp="${i}">${[["hand", "als Handseite übernehmen"], ["link", "verknüpfen (live, dort pflegen)"], ["gen", "wird generiert (weglassen)"], ["skip", "weglassen"]]
       .map(([v, l]) => `<option value="${v}" ${r.action === v ? "selected" : ""}>${l}</option>`).join("")}</select>`;
     m.innerHTML = `<div><div class="small">Werkzeug</div><div style="font-size:20px;font-weight:700">Aus Bestand übernehmen</div></div>
       <div class="hint">Liest ein bestehendes Dashboard. Seiten, die zu einer Etage oder einem Raum passen, erzeugt HomeCockpit künftig selbst; alles andere wird als feste Seite übernommen. Navigationsknöpfe werden auf dieses Dashboard umgebogen. Erst „Speichern“ schreibt etwas.</div>
@@ -1516,7 +1594,9 @@ class HomeCockpitEditor extends HTMLElement {
     const oldBase = "/" + (imp.url || "lovelace") + "/";
     const newBase = "/" + (this._urlPath || "lovelace") + "/";
     const fix = (v) => JSON.parse(JSON.stringify(v).split(`"${oldBase}`).join(`"${newBase}`));
-    const hand = imp.rows.filter((r) => r.action === "hand").map((r) => fix(r.view));
+    const hand = imp.rows.filter((r) => r.action === "hand" || r.action === "link").map((r) => r.action === "link"
+      ? { link: { dashboard: imp.url || null, path: r.path }, title: r.title, path: r.path, ...(r.view.icon ? { icon: r.view.icon } : {}), ...(r.view.subview ? { subview: true } : {}) }
+      : fix(r.view));
     const existing = new Set([...pathsOf(c.views_before), ...pathsOf(c.views_after)]);
     const merge = imp.merge !== false && existing.size > 0;
     if (merge) {
@@ -1646,8 +1726,9 @@ class HomeCockpitEditor extends HTMLElement {
   }
 
   async _renderHandPreview(box, token) {
-    const s = this._sel, v = this._hview();
-    if (!v) { box.innerHTML = ""; return; }
+    const s = this._sel, v0 = this._hview();
+    if (!v0) { box.innerHTML = ""; return; }
+    const v = v0.link ? await resolveLinked(v0, this._hass) : v0;
     const ctx = this._ctx;
     const one = s.kind === "hcard";
     let cards = [], hitsHtml = "";
@@ -1873,6 +1954,23 @@ class HomeCockpitEditor extends HTMLElement {
         catch (e) { this._root.querySelector("#jsonerr").textContent = "Fehler: " + e.message; }
         break;
       }
+      case "iconList": {
+        const slot = t.closest(".iconslot"), grid = slot.querySelector(".icongrid");
+        if (!grid.hidden) { grid.hidden = true; break; }
+        grid.innerHTML = ICON_CHOICES.map((ic) => `<button class="b mini" data-act="iconPick" data-icon="${ic}" title="${ic}" style="min-height:40px"><ha-icon icon="${ic}"></ha-icon></button>`).join("");
+        grid.hidden = false; break;
+      }
+      case "iconPick": {
+        const slot = t.closest(".iconslot"), input = slot.querySelector("input");
+        input.value = d.icon; input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+        slot.querySelector(".icongrid").hidden = true; break;
+      }
+      case "linkToCopy": {
+        const s = this._sel, v = this._hview();
+        const full = await resolveLinked(v, this._hass);
+        delete full.link; c[s.key][s.v] = full; renderAll();
+        this._status("Kopie angelegt – ab jetzt hier bearbeiten"); break;
+      }
       case "save": await this._save(); break;
       case "undo": this._undo(); break;
     }
@@ -1903,6 +2001,9 @@ class HomeCockpitEditor extends HTMLElement {
       this._setDirty(); clearTimeout(this._pt); this._pt = setTimeout(() => this._renderTree(), 300); return;
     }
     if (t.dataset.cfield && t.type !== "checkbox") { this._setCfield(t); }
+    if ((t.dataset.hpfield === "icon" || t.dataset.pfield === "icon") && t.closest(".iconslot")) {
+      const pv = t.closest(".iconslot").querySelector(".iconpv ha-icon"); if (pv) pv.setAttribute("icon", t.value || "mdi:help-circle-outline");
+    }
     if (t.dataset.hpfield && t.type !== "checkbox") {
       const v = this._hview(); if (t.value) v[t.dataset.hpfield] = t.value; else delete v[t.dataset.hpfield];
       this._setDirty(); clearTimeout(this._pt); this._pt = setTimeout(() => this._renderTree(), 300);

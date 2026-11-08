@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.3 – 08.11.2026
+- Symbol-Auswahl mit Vorschau (HA-Symbolsuche, wenn verfügbar; sonst Liste häufiger Symbole)
+- Verknüpfte Seiten: eine Seite aus einem anderen Dashboard live einbinden (z. B. LineGuard „Internet“) – gepflegt wird sie dort
+- „In feste Seite umwandeln“ macht aus einer verknüpften Seite eine bearbeitbare Kopie
+
 ## 0.3.2 – 08.11.2026
 - Bestand übernehmen: „Nur fehlende Seiten ergänzen“ – bearbeitete feste Seiten bleiben erhalten
 - Menüseiten (z. B. „weiteres“) werden nicht mehr fälschlich als Etage erkannt

@@ -1,0 +1,4 @@
+node_modules/
+*.zip
+vorschau.html
+*.json.local

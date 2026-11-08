@@ -1,5 +1,8 @@
 # Änderungen
 
+## 0.3.6 – 08.11.2026
+- Verknüpfte Seiten: „Unterseite“ ausschalten wirkt jetzt (vorher galt weiter die Einstellung der Quellseite)
+
 ## 0.3.5 – 08.11.2026
 - Vorschau: Pop-up-Karten (Bubble Card pop-up u. ä.) nur als Platzhalter – sie haben den ganzen Editor ausgeblendet
 

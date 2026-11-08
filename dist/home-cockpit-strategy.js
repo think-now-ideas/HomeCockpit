@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.3.5 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.3.6 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
  *
  * Neu in 0.3: feste Seiten im Editor bearbeitbar (Karten verschieben, bearbeiten, hinzufügen),
@@ -38,7 +38,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.5";
+const VERSION = "0.3.6";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -2106,7 +2106,8 @@ class HomeCockpitEditor extends HTMLElement {
       this._setDirty(); return;
     }
     if (t.dataset.cfield && t.type === "checkbox") { this._cfg[t.dataset.cfield] = t.checked; this._setDirty(); }
-    if (t.dataset.hpfield && t.type === "checkbox") { const v = this._hview(); if (t.checked) v.subview = true; else delete v.subview; this._setDirty(); }
+    // ausdrücklich true/false speichern – bei verknüpften Seiten würde „weglassen“ den Wert der Quelle übernehmen
+    if (t.dataset.hpfield && t.type === "checkbox") { const v = this._hview(); v.subview = t.checked; this._setDirty(); }
   }
 
   // ------------------------------------------------------------------ Speichern / Rückgängig

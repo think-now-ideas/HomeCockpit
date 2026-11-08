@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.2.2 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.2.3 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
  *
  * Neu in 0.2: Editor-Ansicht „⚙ HomeCockpit“ (nur Admins), eigene Seiten (`pages`),
@@ -34,7 +34,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.2.2";
+const VERSION = "0.2.3";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -1239,7 +1239,11 @@ class HomeCockpitEditor extends HTMLElement {
     return conf.views.map((v) => {
       const title = v.title || v.path || "";
       const keys = [slug(title), slug(v.path || ""), lower(v.path || "")];
-      const f = floors.find((x) => keys.includes(slug(x.name)) || keys.includes(lower(x.floor_id)));
+      // Etage erkennen: Name, ID, Aliase, übliche Abkürzungen (EG = Erdgeschoss …)
+      const ABBR = { eg: "erdgeschoss", og: "obergeschoss", dg: "dachgeschoss", kg: "keller", ug: "untergeschoss" };
+      const norm = (t) => { const x = slug(t).replace(/^\d+-/, ""); return ABBR[x] || x; };
+      const fKeys = keys.map(norm);
+      let f = floors.find((x) => [x.name, x.floor_id, ...asList(x.aliases)].some((n) => fKeys.includes(norm(n))));
       const a = areas.find((x) => keys.includes(slug(x.name)) || keys.includes(lower(x.area_id)));
       const empty = !asList(v.sections).some((s) => asList(s.cards).length) && !asList(v.cards).length;
       // Etagenseite = (fast) nur Navigationsknöpfe. Hat sie eigene Inhalte (z. B. Keller mit Heizungsanlage),
@@ -1250,8 +1254,20 @@ class HomeCockpitEditor extends HTMLElement {
       const all = cardsOf([v.sections, v.cards]).filter((c) => c.type !== "heading");
       const nav = all.filter((c) => c.tap_action && c.tap_action.action === "navigate");
       const navOnly = all.length > 0 && nav.length >= all.length * 0.7;
+      // Reine Knopf-Seite, deren Ziele Räume EINER Etage sind → diese Etage
+      if (!f && navOnly) {
+        const count = {};
+        nav.forEach((c) => {
+          const last = lower(String(c.tap_action.navigation_path).split("/").pop());
+          const ar = areas.find((x) => slug(x.name) === last || lower(x.area_id) === last || slug(byArea(this._cfg.paths, x) || "") === last);
+          if (ar && ar.floor_id) count[ar.floor_id] = (count[ar.floor_id] || 0) + 1;
+        });
+        const best = Object.entries(count).sort((x, y) => y[1] - x[1])[0];
+        if (best && best[1] >= 2) f = floors.find((x) => x.floor_id === best[0]);
+      }
       let action = "hand", why = "eigene Seite";
       if (v.strategy) { action = "skip"; why = "Strategie-Seite"; }
+      else if (v.type === "panel" && asList(v.cards).some((c) => c.type === "custom:home-cockpit-editor")) { action = "skip"; why = "HomeCockpit-Editor"; }
       else if (empty) { action = "skip"; why = "leer"; }
       else if (f && navOnly) { action = "gen"; why = `Etage ${f.name} (nur Raumknöpfe)`; }
       else if (f) { why = `Etage ${f.name} mit eigenen Inhalten – als Handseite`; }
@@ -1274,7 +1290,7 @@ class HomeCockpitEditor extends HTMLElement {
     // Alte Pfade beibehalten, damit Knöpfe auf den Handseiten weiter funktionieren
     const paths = { ...(c.paths || {}) };
     imp.rows.filter((r) => r.action === "gen").forEach((r) => {
-      const name = r.floor ? r.floor.name : r.area ? r.area.name : null;
+      const name = r.floor && !r.area ? r.floor.name : r.area ? r.area.name : r.floor ? r.floor.name : null;
       if (name && r.path && r.path !== slug(name)) paths[name] = r.path;
     });
     c.paths = paths;
@@ -1290,7 +1306,29 @@ class HomeCockpitEditor extends HTMLElement {
     const miss = all.filter((e) => e.status === "missing");
     const groups = {};
     miss.forEach((e) => (groups[e.why] = groups[e.why] || []).push(e));
+    // Knöpfe auf Handseiten, deren Ziel es in diesem Dashboard nicht (mehr) gibt
+    const { floors } = buildLayout(this._cfg, this._hass);
+    const have = new Set([...pathsOf(this._cfg.views_before), ...pathsOf(this._cfg.views_after),
+      ...floors.filter((f) => !f.hand).map((f) => f.path), ...floors.flatMap((f) => f.areas.map((a) => a.path)),
+      ...asList(this._cfg.pages).map((pg) => pg.path || slug(pg.title)), "nicht-zugeordnet", "homecockpit"]);
+    const base = "/" + (this._urlPath || "lovelace") + "/";
+    const dead = [];
+    const scan = (n, page) => {
+      if (Array.isArray(n)) return n.forEach((x) => scan(x, page));
+      if (!n || typeof n !== "object") return;
+      const np = n.tap_action && n.tap_action.navigation_path;
+      if (typeof np === "string") {
+        const inside = np.startsWith(base) || !np.startsWith("/");
+        const target = np.startsWith(base) ? np.slice(base.length) : np;
+        if (inside && !have.has(target.split("#")[0])) dead.push({ page, target, name: n.name || n.entity || n.type });
+      }
+      Object.values(n).forEach((v) => scan(v, page));
+    };
+    [...asList(this._cfg.views_before), ...asList(this._cfg.views_after)].forEach((v) => scan(v.sections || v.cards, v.title || v.path));
     m.innerHTML = `<div><div class="small">Werkzeug</div><div style="font-size:20px;font-weight:700">Nicht zugeordnet (${miss.length})</div></div>
+      ${dead.length ? `<div class="hint warn"><b>${dead.length} Knöpfe führen ins Leere</b> – Ziel gibt es in diesem Dashboard nicht:
+        ${dead.map((d) => `<div class="small">Seite ${esc(d.page)} · ${esc(d.name)} → <code>${esc(d.target)}</code></div>`).join("")}
+        <div class="small" style="margin-top:4px">Lösung: Seite übernehmen, Etage in „Etagen“ aufnehmen oder unter „Eigene Pfade“ zuordnen (z. B. <code>EG = erdgeschoss</code>).</div></div>` : ""}
       <div class="hint">Geräte, die mit dem aktuellen (auch ungespeicherten) Bauplan nirgends erscheinen. Lösung: Bereich in HA setzen, Baustein-Regel erweitern oder bewusst weglassen.</div>
       ${Object.entries(groups).sort((a, b) => b[1].length - a[1].length).map(([why, list]) => `<div>
         <div class="lbl" style="margin:8px 0 4px">${esc(why)} (${list.length})</div>

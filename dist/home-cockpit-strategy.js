@@ -1,8 +1,12 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.2.3 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.3.0 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
+ *
+ * Neu in 0.3: feste Seiten im Editor bearbeitbar (Karten verschieben, bearbeiten, hinzufügen),
+ * „Automatisch machen“ (Baustein mitten in einer festen Seite: `custom:home-cockpit-block`),
+ * Versionsprüfung gegen die Datei auf dem HA-Server.
  *
  * Neu in 0.2: Editor-Ansicht „⚙ HomeCockpit“ (nur Admins), eigene Seiten (`pages`),
  * Kartenvorlagen (`templates`, Platzhalter {entity} {name} {area} {entities}),
@@ -34,7 +38,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.2.3";
+const VERSION = "0.3.0";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -491,6 +495,34 @@ function roomBlocks(config) {
 }
 
 // ---------------------------------------------------------------------------
+// Bausteine mitten in festen Seiten: { type: "custom:home-cockpit-block", block: {...} }
+// ---------------------------------------------------------------------------
+
+const BLOCK_CARD = "custom:home-cockpit-block";
+
+/** Ersetzt in einer festen Seite jede Baustein-Karte durch die erzeugten Karten. */
+async function expandHandView(view, config, hass, ctx) {
+  if (!JSON.stringify(view).includes(BLOCK_CARD)) return view; // schnell: nichts zu tun
+  const ents = collectEntities(hass).filter((e) => !excludedWhy(e, config));
+  const expandCards = async (cards) => {
+    const out = [];
+    for (const c of asList(cards)) {
+      if (c && c.type === BLOCK_CARD && c.block) {
+        const { result } = assignBlocks(ents, [c.block], ctx);
+        out.push(...(await sectionFromBlocks(result, null, config)));
+      } else if (c && Array.isArray(c.cards)) {
+        out.push({ ...c, cards: await expandCards(c.cards) }); // Stacks
+      } else out.push(c);
+    }
+    return out;
+  };
+  const v = { ...view };
+  if (Array.isArray(v.sections)) v.sections = await Promise.all(v.sections.map(async (sec) => ({ ...sec, cards: await expandCards(sec.cards) })));
+  if (Array.isArray(v.cards)) v.cards = await expandCards(v.cards);
+  return v;
+}
+
+// ---------------------------------------------------------------------------
 // Dashboard-Strategie: Ansichten-Liste
 // ---------------------------------------------------------------------------
 
@@ -499,8 +531,9 @@ class HomeCockpitDashboardStrategy extends HTMLElement {
     const { floors, homePath } = buildLayout(config, hass);
     const views = [];
 
-    // 1. Handseiten vorne (unverändert)
-    views.push(...asList(config.views_before));
+    // 1. Handseiten vorne (Baustein-Karten darin werden erzeugt)
+    const hctx = { hass, labels: await loadLabels(hass) };
+    for (const v of asList(config.views_before)) views.push(await expandHandView(v, config, hass, hctx));
 
     // 2. Ohne eigene Startseite: einfache Übersicht mit Etagenknöpfen
     if (!asList(config.views_before).length) {
@@ -539,8 +572,8 @@ class HomeCockpitDashboardStrategy extends HTMLElement {
     });
     asList(config.pages).forEach((pg, i) => { if (pg.position !== "end") views.push(pageView(pg, i)); });
 
-    // 5. Handseiten hinten (unverändert)
-    views.push(...asList(config.views_after));
+    // 5. Handseiten hinten
+    for (const v of asList(config.views_after)) views.push(await expandHandView(v, config, hass, hctx));
     asList(config.pages).forEach((pg, i) => { if (pg.position === "end") views.push(pageView(pg, i)); });
 
     // 6. Nicht zugeordnet
@@ -729,6 +762,19 @@ async function explainAll(config, hass) {
       if (!placed.has(e.entity_id)) placed.set(e.entity_id, block.name);
     }));
   }
+  // Bausteine in festen Seiten
+  const handBlocks = [];
+  const findBlocks = (n, page) => {
+    if (Array.isArray(n)) return n.forEach((x) => findBlocks(x, page));
+    if (!n || typeof n !== "object") return;
+    if (n.type === BLOCK_CARD && n.block) handBlocks.push({ page, block: n.block });
+    Object.values(n).forEach((x) => findBlocks(x, page));
+  };
+  [...asList(config.views_before), ...asList(config.views_after)].forEach((v) => findBlocks(v, v.title || v.path));
+  for (const hb of handBlocks) {
+    const { result } = assignBlocks(all.filter((e) => !excludedWhy(e, config)), [hb.block], ctx);
+    result[0].hits.forEach((e) => { if (!placed.has(e.entity_id)) placed.set(e.entity_id, `Seite ${hb.page} › ${hb.block.name}`); });
+  }
   // Eigene Seiten: Bausteine gelten für alle Bereiche
   for (const pg of asList(config.pages)) {
     const ents = all.filter((e) => !excludedWhy(e, config));
@@ -916,6 +962,29 @@ class HomeCockpitEditor extends HTMLElement {
     this._dirty = false;
     this._shell();
     this._renderAll();
+    this._checkVersion();
+  }
+
+  /**
+   * Vergleicht die geladene Version mit der Datei, die HA ausliefert.
+   * Unterschied = Browser/App hat eine alte Datei zwischengespeichert. Fragt NICHT im Internet nach.
+   */
+  async _checkVersion() {
+    try {
+      const res = await this._hass.callWS({ type: "lovelace/resources" });
+      const r = asList(res).find((x) => /home-cockpit-strategy\.js/.test(x.url || ""));
+      if (!r) return;
+      const url = r.url + (r.url.includes("?") ? "&" : "?") + "_hc=" + Date.now();
+      const txt = await (await fetch(url, { cache: "no-store" })).text();
+      const m = txt.match(/const VERSION = "([^"]+)"/);
+      if (!m || m[1] === VERSION) return;
+      const bar = this._root.querySelector(".bar");
+      bar.insertAdjacentHTML("afterend", `<div class="hint warn" style="margin:10px 14px 0">
+        <b>Auf deinem HA liegt Version ${esc(m[1])}, geladen ist aber noch ${esc(VERSION)}.</b>
+        Der Browser bzw. die App benutzt eine zwischengespeicherte Datei. Abhilfe: HA-App → Einstellungen → Companion App → Fehlerbehebung →
+        „Frontend-Cache zurücksetzen“ (Safari: Website-Daten der HA-Adresse löschen), App/Tab ganz schließen und neu öffnen.
+        Ressource: <code>${esc(r.url)}</code></div>`);
+    } catch (e) { /* ohne Admin-Rechte oder offline: keine Prüfung */ }
   }
 
   _fatal(msg) { this._root.innerHTML = `<div class="wrap"><div class="col"><b>HomeCockpit</b><p>${esc(msg)}</p></div></div>`; }
@@ -955,7 +1024,28 @@ class HomeCockpitEditor extends HTMLElement {
     const s = this._sel, c = this._cfg;
     if (s.kind === "room") return asList(c.room[s.side])[s.i];
     if (s.kind === "pblock") return asList((c.pages[s.p] || {}).blocks)[s.i];
+    if (s.kind === "hcard") { const card = this._hcard(); return card && card.type === BLOCK_CARD ? card.block : null; }
     return null;
+  }
+
+  // ---- feste Seiten: Behälter = Abschnitte (sections) oder eine Kartenliste (masonry)
+  _hview(s = this._sel) { return asList(this._cfg[s.key])[s.v]; }
+  _containers(v) {
+    if (!v) return [];
+    if (Array.isArray(v.sections)) return v.sections;
+    v.cards = asList(v.cards);
+    return [v];
+  }
+  _hcard(s = this._sel) {
+    const v = this._hview(s); if (!v) return null;
+    const c = this._containers(v)[s.sec]; return c ? asList(c.cards)[s.c] : null;
+  }
+  _cardLabel(card) {
+    if (!card) return "—";
+    if (card.type === BLOCK_CARD) return (card.block && card.block.name) || "Baustein";
+    const st = this._hass.states[card.entity] || {};
+    return card.name || card.title || card.heading || (st.attributes && st.attributes.friendly_name) || card.entity
+      || (card.type || "Karte").replace("custom:", "");
   }
   _blockList() {
     const s = this._sel, c = this._cfg;
@@ -976,7 +1066,13 @@ class HomeCockpitEditor extends HTMLElement {
       `<span class="dot"></span>`) ;
     let h = `<div class="lbl">Gliederung</div>`;
     h += `<div class="grp">Feste Seiten</div>`;
-    h += item(`Start & Handseiten (${asList(c.views_before).length + asList(c.views_after).length})`, "sel", `data-kind="hand"`, " ind" + on("hand"), `<span class="dot fix"></span>`);
+    h += item(`Übersicht & Reihenfolge`, "sel", `data-kind="hand"`, " ind" + on("hand"), `<span class="dot fix"></span>`);
+    for (const key of ["views_before", "views_after"]) {
+      asList(c[key]).forEach((v, vi) => {
+        const isOn = (s.kind === "hpage" || s.kind === "hcard") && s.key === key && s.v === vi;
+        h += item(v.title || v.path || "Seite", "sel", `data-kind="hpage" data-key="${key}" data-v="${vi}"`, " ind" + (isOn ? " on" : ""), `<span class="dot fix"></span>`);
+      });
+    }
     h += `<div class="grp">↻ Etage <span class="small">je Etage</span></div>`;
     h += item("Etagen & Raumknöpfe", "sel", `data-kind="floors"`, " ind" + on("floors"), `<span class="dot"></span>`);
     h += `<div class="grp">↻ Raum <span class="small">je Bereich</span></div>`;
@@ -1008,6 +1104,12 @@ class HomeCockpitEditor extends HTMLElement {
     else if (k === "page") m.innerHTML = this._pageForm();
     else if (k === "floors") m.innerHTML = this._floorForm();
     else if (k === "hand") m.innerHTML = this._handForm();
+    else if (k === "hpage") m.innerHTML = this._hpageForm();
+    else if (k === "hcard") {
+      const card = this._hcard();
+      if (card && card.type === BLOCK_CARD) m.innerHTML = this._blockForm();
+      else { m.innerHTML = this._hcardForm(); this._mountCardEditor(); }
+    }
     else if (k === "templates") m.innerHTML = this._templatesForm();
     else if (k === "import") { m.innerHTML = `<div class="lbl">Aus Bestand übernehmen</div><div>Lade Dashboards …</div>`; this._importForm(m); }
     else if (k === "unassigned") { m.innerHTML = `<div class="lbl">Nicht zugeordnet</div><div>Berechne …</div>`; this._unassignedForm(m); }
@@ -1050,15 +1152,21 @@ class HomeCockpitEditor extends HTMLElement {
     const tplOpts = Object.entries(this._cfg.templates).map(([id, t]) =>
       `<option value="template:${esc(id)}" ${b.card === "template" && b.template === id ? "selected" : ""}>Vorlage: ${esc(t.label)}</option>`).join("");
     const kindOpts = CARD_KINDS.map(([v, l]) => `<option value="${v}" ${(b.card || "tile") === v ? "selected" : ""}>${l}</option>`).join("");
-    const where = isRoom ? `Raumseite (je Bereich) · ${s.side === "left" ? "linke" : "rechte"} Spalte` : `Seite „${esc(this._cfg.pages[s.p].title)}“`;
+    const isHand = s.kind === "hcard";
+    const where = isRoom ? `Raumseite (je Bereich) · ${s.side === "left" ? "linke" : "rechte"} Spalte`
+      : isHand ? `Feste Seite „${esc((this._hview() || {}).title || "")}“ · automatischer Baustein` : `Seite „${esc(this._cfg.pages[s.p].title)}“`;
     return `${this._datalists()}
       <div class="row" style="justify-content:space-between">
         <div><div class="small">${where}</div><div style="font-size:20px;font-weight:700">${esc(b.name || "(ohne Name)")}</div></div>
         <div class="row">
+          ${isHand ? `<button class="b mini" data-act="hpageBack">← zur Seite</button>
+          <button class="b mini" data-act="hcardMove" data-d="-1" aria-label="nach oben">↑</button>
+          <button class="b mini" data-act="hcardMove" data-d="1" aria-label="nach unten">↓</button>
+          <button class="b mini danger" data-act="hcardDel">Entfernen</button>` : `
           <button class="b mini" data-act="moveBlock" data-d="-1" aria-label="nach oben">↑</button>
           <button class="b mini" data-act="moveBlock" data-d="1" aria-label="nach unten">↓</button>
           ${isRoom ? `<button class="b mini" data-act="switchSide">Spalte wechseln</button>` : ""}
-          <button class="b mini danger" data-act="delBlock">Entfernen</button>
+          <button class="b mini danger" data-act="delBlock">Entfernen</button>`}
         </div>
       </div>
       <div class="hint">${isRoom
@@ -1134,6 +1242,114 @@ class HomeCockpitEditor extends HTMLElement {
       <div class="lbl">Hinten</div><table>${rows("views_after") || `<tr><td class="small">keine</td></tr>`}</table>`;
   }
 
+  _hpageForm() {
+    const v = this._hview(), s = this._sel;
+    if (!v) return `<div>Seite nicht gefunden.</div>`;
+    const conts = this._containers(v);
+    const isSections = Array.isArray(v.sections);
+    let rows = "";
+    conts.forEach((ct, sec) => {
+      rows += `<div class="row" style="justify-content:space-between;margin-top:8px"><div class="lbl">${isSections ? `Abschnitt ${sec + 1}` : "Karten"}</div>
+        <div class="row"><button class="b mini" data-act="hcardAdd" data-sec="${sec}">+ Karte</button>
+        ${isSections && !asList(ct.cards).length ? `<button class="b mini danger" data-act="hsecDel" data-sec="${sec}">Abschnitt löschen</button>` : ""}</div></div>`;
+      asList(ct.cards).forEach((card, ci) => {
+        const auto = card.type === BLOCK_CARD;
+        rows += `<div class="hit"><span class="ti" style="padding:0;min-height:0;width:auto;flex:1;cursor:pointer" data-act="hcardSel" data-sec="${sec}" data-c="${ci}">
+          <span class="dot${auto ? "" : " fix"}"></span><span class="grow"><b>${esc(this._cardLabel(card))}</b>
+          <span class="small"> · ${auto ? "automatisch" : esc((card.type || "").replace("custom:", ""))}</span></span></span>
+          <button class="b mini" data-act="hcardMoveAt" data-sec="${sec}" data-c="${ci}" data-d="-1" aria-label="nach oben">↑</button>
+          <button class="b mini" data-act="hcardMoveAt" data-sec="${sec}" data-c="${ci}" data-d="1" aria-label="nach unten">↓</button>
+          <button class="b mini" data-act="hcardSel" data-sec="${sec}" data-c="${ci}">Bearbeiten</button></div>`;
+      });
+    });
+    return `<div class="row" style="justify-content:space-between"><div><div class="small">Feste Seite · ${s.key === "views_before" ? "vorne" : "hinten"}</div>
+        <div style="font-size:20px;font-weight:700">${esc(v.title || v.path)}</div></div>
+        <button class="b mini danger" data-act="hpageDel">Seite entfernen</button></div>
+      <div class="hint">Jede Karte dieser Seite. <b>Ocker</b> = feste Karte (genau so, wie du sie gebaut hast), <b>blau</b> = automatischer Baustein. Eine feste Karte kannst du mit „Automatisch machen“ für alle passenden Geräte verwenden.</div>
+      <div class="row"><label for="hp-t">Titel</label><input id="hp-t" data-hpfield="title" value="${esc(v.title || "")}"></div>
+      <div class="row"><label for="hp-p">Pfad</label><input id="hp-p" data-hpfield="path" value="${esc(v.path || "")}"></div>
+      <div class="row"><label for="hp-i">Symbol</label><input id="hp-i" data-hpfield="icon" value="${esc(v.icon || "")}" placeholder="mdi:home"></div>
+      <div class="row"><label><input type="checkbox" data-hpfield="subview" ${v.subview ? "checked" : ""} style="width:auto;min-height:0"> Unterseite (kein Tab)</label></div>
+      ${rows || `<div class="small">Keine Karten.</div>`}
+      ${isSections ? `<div class="row" style="margin-top:8px"><button class="b mini" data-act="hsecAdd">+ Abschnitt</button></div>` : ""}
+      <div id="tplpick"></div>`;
+  }
+
+  _hcardForm() {
+    const card = this._hcard(), v = this._hview();
+    const canAuto = typeof card.entity === "string" || Array.isArray(card.entities);
+    return `<div class="row" style="justify-content:space-between"><div><div class="small">Feste Seite „${esc(v.title || v.path)}“ · feste Karte</div>
+        <div style="font-size:20px;font-weight:700">${esc(this._cardLabel(card))}</div></div>
+        <div class="row">
+          <button class="b mini" data-act="hpageBack">← zur Seite</button>
+          <button class="b mini" data-act="hcardMove" data-d="-1" aria-label="nach oben">↑</button>
+          <button class="b mini" data-act="hcardMove" data-d="1" aria-label="nach unten">↓</button>
+          <button class="b mini" data-act="hcardDup">Duplizieren</button>
+          <button class="b mini danger" data-act="hcardDel">Entfernen</button></div></div>
+      ${canAuto ? `<div class="hint"><b>Automatisch machen:</b> Diese Karte – genau so konfiguriert – für alle Geräte verwenden, die zu einer Regel passen (z. B. alle Fenster, alle Thermostate mit Label „heizung“). Neue Geräte kommen dann von selbst dazu.
+        <div class="row" style="margin-top:6px"><button class="b pri" data-act="hcardAuto">Automatisch machen</button></div></div>` : ""}
+      <div class="lbl">Karte bearbeiten</div>
+      <div id="cardedit"><div class="small">Karteneditor lädt …</div></div>`;
+  }
+
+  /** Versucht den grafischen Karteneditor von HA; sonst Textfeld (JSON). */
+  async _mountCardEditor() {
+    const box = this._root.querySelector("#cardedit");
+    const card = this._hcard();
+    if (!box || !card) return;
+    const token = (this._edToken = (this._edToken || 0) + 1);
+    let ok = false;
+    try {
+      if (!customElements.get("hui-card-element-editor") && window.loadCardHelpers) {
+        // Trick: der Stapel-Editor von HA lädt den allgemeinen Karteneditor mit
+        const h = await window.loadCardHelpers();
+        const stack = await h.createCardElement({ type: "vertical-stack", cards: [] });
+        if (stack && stack.constructor && stack.constructor.getConfigElement) await stack.constructor.getConfigElement();
+        await Promise.race([customElements.whenDefined("hui-card-element-editor"), new Promise((r) => setTimeout(r, 3000))]);
+      }
+      if (token !== this._edToken) return;
+      if (customElements.get("hui-card-element-editor")) {
+        const ed = document.createElement("hui-card-element-editor");
+        ed.hass = this._hass;
+        ed.lovelace = { config: { views: [] }, editMode: true };
+        ed.value = clone(card);
+        ed.addEventListener("config-changed", (ev) => {
+          ev.stopPropagation();
+          const conf = ev.detail && ev.detail.config;
+          if (conf && typeof conf === "object" && conf.type) this._replaceCard(conf);
+        });
+        box.innerHTML = "";
+        box.appendChild(ed);
+        ok = true;
+      }
+    } catch (e) { console.warn(LOG, "HA-Karteneditor nicht verfügbar", e); ok = false; }
+    if (!ok) this._textEditor(box, card);
+    const sw = document.createElement("div");
+    sw.className = "row"; sw.style.marginTop = "8px";
+    sw.innerHTML = `<button class="b mini" data-act="textEdit">${ok ? "Als Text bearbeiten" : ""}</button>`;
+    if (ok) box.appendChild(sw);
+  }
+  _textEditor(box, card) {
+    box.innerHTML = `<textarea id="cardjson" style="min-height:260px">${esc(JSON.stringify(card, null, 2))}</textarea>
+      <div class="row" style="margin-top:6px"><button class="b pri" data-act="applyJson">Übernehmen</button><span class="small" id="jsonerr">Format: JSON</span></div>`;
+  }
+  _replaceCard(conf) {
+    const s = this._sel, v = this._hview();
+    const ct = this._containers(v)[s.sec];
+    ct.cards[s.c] = conf;
+    this._setDirty();
+    clearTimeout(this._pt); this._pt = setTimeout(() => { this._renderPreview(); this._renderTree(); }, 400);
+  }
+  /** Regel aus einer Karte raten: Domäne + Geräteklasse der Entität */
+  _guessRule(card) {
+    const id = typeof card.entity === "string" ? card.entity : asList(card.entities).map((x) => (typeof x === "string" ? x : x && x.entity)).find(Boolean);
+    if (!id) return [{ domain: "light" }];
+    const e = collectEntities(this._hass).find((x) => x.entity_id === id);
+    const g = { domain: id.split(".")[0] };
+    if (e && e.device_class) g.device_class = e.device_class;
+    return [g];
+  }
+
   _templatesForm() {
     const t = this._cfg.templates;
     const used = (id) => [...asList(this._cfg.room.left), ...asList(this._cfg.room.right), ...this._cfg.pages.flatMap((p) => asList(p.blocks))]
@@ -1197,7 +1413,7 @@ class HomeCockpitEditor extends HTMLElement {
     const q = lower(query).split(/\s+/).filter(Boolean);
     const hits = p.cards.filter((x) => q.every((w) => lower(x.view + " " + x.card.type + " " + (x.card.entity || "") + " " + (x.card.name || "")).includes(w))).slice(0, 60);
     box.innerHTML = `<div class="col" style="border-style:dashed">
-      <div class="row" style="justify-content:space-between"><b>Karte als Vorlage nehmen</b><button class="b mini" data-act="closePicker">Schließen</button></div>
+      <div class="row" style="justify-content:space-between"><b>${this._addTo !== undefined ? "Karte aus einem Dashboard einfügen" : "Karte als Vorlage nehmen"}</b><button class="b mini" data-act="closePicker">Schließen</button></div>
       <div class="row" style="margin-top:8px"><label for="pk-d">Dashboard</label><select id="pk-d" data-pick="dash">${p.ds.map((d) =>
         `<option value="${esc(d.url_path ?? "")}" ${String(d.url_path ?? "") === String(p.url ?? "") ? "selected" : ""}>${esc(d.title)}</option>`).join("")}</select></div>
       <div class="row" style="margin-top:6px"><label for="pk-q">Suchen</label><input id="pk-q" data-pick="q" value="${esc(query)}" placeholder="Teilwörter: Seite, Kartentyp, Gerät …"></div>
@@ -1349,6 +1565,7 @@ class HomeCockpitEditor extends HTMLElement {
     const s = this._sel;
     const token = (this._pvToken = (this._pvToken || 0) + 1);
     this._pvEls = [];
+    if (s.kind === "hpage" || s.kind === "hcard") { await this._renderHandPreview(box, token); return; }
     if (s.kind !== "room" && s.kind !== "pblock" && s.kind !== "page") {
       box.innerHTML = `<div class="lbl">Vorschau</div><div class="small">Einen Baustein wählen, um die Karten zu sehen.</div>`;
       return;
@@ -1397,6 +1614,31 @@ class HomeCockpitEditor extends HTMLElement {
     await this._mountCards(box.querySelector("#pvcards"), cards, token);
   }
 
+  async _renderHandPreview(box, token) {
+    const s = this._sel, v = this._hview();
+    if (!v) { box.innerHTML = ""; return; }
+    const ctx = this._ctx;
+    const one = s.kind === "hcard";
+    let cards = [], hitsHtml = "";
+    if (one) {
+      const card = this._hcard();
+      if (card && card.type === BLOCK_CARD) {
+        const ents = collectEntities(this._hass).filter((e) => !excludedWhy(e, this._cfg));
+        const b = card.block;
+        const { result } = assignBlocks(ents, [b], ctx);
+        const exHits = ents.filter((e) => asList(b.exclude).includes(e.entity_id) && matchBlock(e, { ...b, exclude: [] }, ctx));
+        hitsHtml = this._hitList(b, result[0].hits, exHits, ents);
+        cards = await sectionFromBlocks(result, null, this._cfg);
+      } else if (card) cards = [card];
+    } else {
+      const exp = await expandHandView(v, this._cfg, this._hass, ctx);
+      cards = this._containers(exp).flatMap((ct) => asList(ct.cards));
+    }
+    if (token !== this._pvToken) return;
+    box.innerHTML = `<div class="lbl">Vorschau · ${one ? "Karte" : "Seite " + esc(v.title || v.path)}</div><div class="pv" id="pvcards"></div>${hitsHtml}<div id="why"></div>`;
+    await this._mountCards(box.querySelector("#pvcards"), cards, token);
+  }
+
   _hitList(b, hits, exHits, scope) {
     const rows = [...hits.map((e) => ({ e, on: true })), ...exHits.map((e) => ({ e, on: false }))];
     return `<div><div class="lbl" style="margin:6px 0 2px">Treffer ${hits.length}${exHits.length ? ` · ${exHits.length} ausgenommen` : ""}</div>
@@ -1442,9 +1684,11 @@ class HomeCockpitEditor extends HTMLElement {
     if (!box) return;
     const b = this._block(), s = this._sel;
     const rows = [];
-    if (info.type === "heading") rows.push(["Karte", "Überschrift des Bausteins"]);
+    if (s.kind === "hpage" || (s.kind === "hcard" && !b)) rows.push(["Karte", "feste Karte – steht genau so in der Seite"], ["Seite", (this._hview() || {}).title || ""]);
+    else if (info.type === "heading") rows.push(["Karte", "Überschrift des Bausteins"]);
     else {
-      rows.push(["Ansicht", s.kind === "room" ? "Raumseite (je Bereich)" : `Seite „${this._cfg.pages[s.p].title}“`]);
+      rows.push(["Ansicht", s.kind === "room" ? "Raumseite (je Bereich)" : s.kind === "hcard" ? `Feste Seite „${(this._hview() || {}).title || ""}“`
+        : `Seite „${this._cfg.pages[s.p].title}“`]);
       if (s.kind === "room") rows.push(["Raum", ((this._hass.areas || {})[this._sampleArea] || {}).name || "—"]);
       if (b) rows.push(["Baustein", `${b.name} · Karte: ${b.card === "template" ? "Vorlage " + ((this._cfg.templates[b.template] || {}).label || b.template) : b.card || "tile"}`]);
       if (b) rows.push(["Regel", asList(b.any).map((g) => Object.entries(g).map(([k, v]) => `${(CRITERIA.find((c) => c[0] === k) || [k, k])[1]} = ${listText(v)}`).join(" UND ")).join(" ODER ") || "alles"]);
@@ -1468,7 +1712,8 @@ class HomeCockpitEditor extends HTMLElement {
     const renderAll = () => { this._setDirty(); this._renderAll(); };
     switch (a) {
       case "sel":
-        this._sel = { kind: d.kind, side: d.side, i: d.i !== undefined ? +d.i : undefined, p: d.p !== undefined ? +d.p : undefined };
+        this._sel = { kind: d.kind, side: d.side, i: d.i !== undefined ? +d.i : undefined, p: d.p !== undefined ? +d.p : undefined,
+          key: d.key, v: d.v !== undefined ? +d.v : undefined };
         this._pick = null;
         this._renderAll(); break;
       case "addRoomBlock":
@@ -1504,6 +1749,12 @@ class HomeCockpitEditor extends HTMLElement {
       case "closePicker": { const box = this._root.querySelector("#tplpick"); if (box) box.innerHTML = ""; this._pick = null; break; }
       case "useCard": {
         const x = this._pick.cards[+d.ci];
+        if (this._sel.kind === "hpage" && this._addTo !== undefined) {
+          const s = this._sel, ct = this._containers(this._hview())[this._addTo];
+          ct.cards = asList(ct.cards); ct.cards.push(clone(x.card));
+          this._sel = { kind: "hcard", key: s.key, v: s.v, sec: this._addTo, c: ct.cards.length - 1 };
+          this._addTo = undefined; this._pick = null; renderAll(); break;
+        }
         let id = slug(x.card.type.replace("custom:", "") + "-" + (x.card.name || x.view)) || "vorlage";
         while (c.templates[id]) id += "-2";
         c.templates[id] = makeTemplate(clone(x.card), `${x.card.type.replace("custom:", "")} (${x.view})`);
@@ -1545,6 +1796,52 @@ class HomeCockpitEditor extends HTMLElement {
         this._status("Datei wird geladen");
         break;
       }
+      case "hcardSel":
+        this._sel = { kind: "hcard", key: this._sel.key, v: this._sel.v, sec: +d.sec, c: +d.c };
+        this._renderAll(); break;
+      case "hpageBack": this._sel = { kind: "hpage", key: this._sel.key, v: this._sel.v }; this._renderAll(); break;
+      case "hcardMoveAt": case "hcardMove": {
+        const s = this._sel, v = this._hview();
+        const sec = a === "hcardMoveAt" ? +d.sec : s.sec, ci = a === "hcardMoveAt" ? +d.c : s.c;
+        const conts = this._containers(v), arr = conts[sec].cards, j = ci + +d.d;
+        if (j >= 0 && j < arr.length) { [arr[ci], arr[j]] = [arr[j], arr[ci]]; if (a === "hcardMove") s.c = j; }
+        else if (j < 0 && sec > 0) { const [x] = arr.splice(ci, 1); conts[sec - 1].cards = asList(conts[sec - 1].cards); conts[sec - 1].cards.push(x); if (a === "hcardMove") { s.sec = sec - 1; s.c = conts[sec - 1].cards.length - 1; } }
+        else if (j >= arr.length && sec < conts.length - 1) { const [x] = arr.splice(ci, 1); conts[sec + 1].cards = asList(conts[sec + 1].cards); conts[sec + 1].cards.unshift(x); if (a === "hcardMove") { s.sec = sec + 1; s.c = 0; } }
+        else return;
+        renderAll(); break;
+      }
+      case "hcardDel": { const s = this._sel; this._containers(this._hview()).at(s.sec).cards.splice(s.c, 1); this._sel = { kind: "hpage", key: s.key, v: s.v }; renderAll(); break; }
+      case "hcardDup": { const s = this._sel, arr = this._containers(this._hview())[s.sec].cards; arr.splice(s.c + 1, 0, clone(arr[s.c])); s.c += 1; renderAll(); break; }
+      case "hcardAdd": {
+        this._addTo = +d.sec; this._pick = null; await this._renderPicker("");
+        const box = this._root.querySelector("#tplpick");
+        if (box) box.insertAdjacentHTML("afterbegin", `<div class="row" style="margin-bottom:6px"><button class="b" data-act="hcardAddEmpty">Leere Kachel einfügen</button><span class="small">oder unten eine Karte aus einem Dashboard übernehmen</span></div>`);
+        break;
+      }
+      case "hcardAddEmpty": {
+        const s = this._sel, ct = this._containers(this._hview())[this._addTo || 0];
+        ct.cards = asList(ct.cards); ct.cards.push({ type: "tile", entity: Object.keys(this._hass.states)[0] || "" });
+        this._sel = { kind: "hcard", key: s.key, v: s.v, sec: this._addTo || 0, c: ct.cards.length - 1 }; this._addTo = undefined; renderAll(); break;
+      }
+      case "hsecAdd": { const v = this._hview(); v.sections.push({ type: "grid", cards: [] }); renderAll(); break; }
+      case "hsecDel": { const v = this._hview(); v.sections.splice(+d.sec, 1); renderAll(); break; }
+      case "hpageDel": { const s = this._sel; c[s.key].splice(s.v, 1); this._sel = { kind: "hand" }; renderAll(); break; }
+      case "hcardAuto": {
+        const s = this._sel, card = this._hcard();
+        let id = slug((card.type || "karte").replace("custom:", "") + "-" + this._cardLabel(card)) || "vorlage";
+        while (c.templates[id]) id += "-2";
+        c.templates[id] = makeTemplate(clone(card), `${(card.type || "").replace("custom:", "")} (${this._cardLabel(card)})`);
+        const block = { name: this._cardLabel(card), card: "template", template: id, heading: false, any: this._guessRule(card) };
+        this._containers(this._hview())[s.sec].cards[s.c] = { type: BLOCK_CARD, block };
+        renderAll(); this._status("Automatisch gemacht – Regel prüfen, dann speichern"); break;
+      }
+      case "textEdit": { const box = this._root.querySelector("#cardedit"); this._edToken = (this._edToken || 0) + 1; this._textEditor(box, this._hcard()); break; }
+      case "applyJson": {
+        const ta = this._root.querySelector("#cardjson");
+        try { const conf = JSON.parse(ta.value); if (!conf || !conf.type) throw new Error("„type“ fehlt"); this._replaceCard(conf); this._root.querySelector("#jsonerr").textContent = "Übernommen ✓"; }
+        catch (e) { this._root.querySelector("#jsonerr").textContent = "Fehler: " + e.message; }
+        break;
+      }
       case "save": await this._save(); break;
       case "undo": this._undo(); break;
     }
@@ -1575,6 +1872,10 @@ class HomeCockpitEditor extends HTMLElement {
       this._setDirty(); clearTimeout(this._pt); this._pt = setTimeout(() => this._renderTree(), 300); return;
     }
     if (t.dataset.cfield && t.type !== "checkbox") { this._setCfield(t); }
+    if (t.dataset.hpfield && t.type !== "checkbox") {
+      const v = this._hview(); if (t.value) v[t.dataset.hpfield] = t.value; else delete v[t.dataset.hpfield];
+      this._setDirty(); clearTimeout(this._pt); this._pt = setTimeout(() => this._renderTree(), 300);
+    }
   }
 
   _setCfield(t) {
@@ -1627,6 +1928,7 @@ class HomeCockpitEditor extends HTMLElement {
       this._setDirty(); return;
     }
     if (t.dataset.cfield && t.type === "checkbox") { this._cfg[t.dataset.cfield] = t.checked; this._setDirty(); }
+    if (t.dataset.hpfield && t.type === "checkbox") { const v = this._hview(); if (t.checked) v.subview = true; else delete v.subview; this._setDirty(); }
   }
 
   // ------------------------------------------------------------------ Speichern / Rückgängig

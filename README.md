@@ -7,9 +7,10 @@ Dashboard-Strategie für Home Assistant: baut Dashboards **nach Regeln** (Etagen
 - **Kartenvorlagen** aus vorhandenen Karten (auch Mushroom, button-card …): Gerät wird zu `{entity}`, Name zu `{name}`
 - **Feste Seiten** bleiben erhalten (Startseite mit Uhr, Kamera …) – „Aus Bestand übernehmen“ liest ein bestehendes Dashboard ein
 - **Warum ist diese Karte hier?**, Ausnahmen per Haken, **Nicht zugeordnet** mit Grund
-- Editor-Tab **„HomeCockpit“** nur für Admins, Speichern mit Rückgängig
+- **Feste Seiten bearbeiten**: Karten verschieben, duplizieren, bearbeiten, aus anderen Dashboards einfügen – oder mit **„Automatisch machen“** in eine Regel verwandeln
+- Editor-Tab **„HomeCockpit“** nur für Admins, Speichern mit Rückgängig, Hinweis bei veralteter Datei im Browser-Cache
 
-> Status: **frühe Testversion (0.2.x)**. Bitte zuerst in einem neuen Test-Dashboard ausprobieren.
+> Status: **frühe Testversion (0.3.x)**. Bitte zuerst in einem neuen Test-Dashboard ausprobieren.
 
 ## Installation (HACS)
 1. HACS → ⋮ → **Benutzerdefinierte Repositories** → `https://github.com/think-now-ideas/HomeCockpit`, Typ **Dashboard** → Hinzufügen.
@@ -22,6 +23,9 @@ Ohne den Dialog (HA vor 2026.5): neues leeres Dashboard → ✏️ → ⋮ → R
 strategy:
   type: custom:home-cockpit
 ```
+
+## Updates
+Neue Versionen erscheinen in HACS als Update (z. B. „0.3.0 → 0.3.1“). Danach Seite neu laden. Zeigt der Editor oben einen Hinweis „Auf deinem HA liegt Version …“, hat der Browser/die App noch die alte Datei: HA-App → Einstellungen → Companion App → Fehlerbehebung → Frontend-Cache zurücksetzen.
 
 ## Wichtig
 - Im erzeugten Dashboard **nicht** „Kontrolle übernehmen“ wählen – das friert alles als YAML ein. Änderungen im Tab HomeCockpit.

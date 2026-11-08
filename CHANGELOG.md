@@ -1,0 +1,18 @@
+# Änderungen
+
+## 0.3.0 – 08.11.2026
+- Feste Seiten im Editor bearbeitbar: jede Seite in der Gliederung, Karten verschieben (auch zwischen Abschnitten), duplizieren, löschen, Abschnitte anlegen/löschen, Titel/Pfad/Symbol ändern
+- Karte bearbeiten: grafischer Karteneditor von Home Assistant (wenn verfügbar), sonst als Text (JSON)
+- „+ Karte“: leere Kachel oder Karte aus einem anderen Dashboard einfügen
+- „Automatisch machen“: feste Karte wird zur Vorlage + Regel mitten in der festen Seite (`custom:home-cockpit-block`)
+- Versionsprüfung: Hinweis, wenn der Browser eine ältere Datei geladen hat als auf dem HA-Server liegt
+- ab jetzt Versionen als GitHub-Releases
+
+## 0.2.3
+- Etagen auch über Abkürzungen (EG/OG/DG/KG), Aliase und Raumknöpfe erkennen; tote Knöpfe in „Nicht zugeordnet“
+
+## 0.2.2
+- Bauplan kopieren ohne HTTPS, Download als Datei
+
+## 0.2.1
+- erste HACS-Fassung: Strategie + Editor-Tab, Anmeldung im Dialog „Dashboard hinzufügen“

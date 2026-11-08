@@ -1,5 +1,8 @@
 # Änderungen
 
+## 0.3.5 – 08.11.2026
+- Vorschau: Pop-up-Karten (Bubble Card pop-up u. ä.) nur als Platzhalter – sie haben den ganzen Editor ausgeblendet
+
 ## 0.3.4 – 08.11.2026
 - Verknüpfte Seiten: Fehler werden angezeigt statt leerer Seite; „Verknüpfung prüfen“ im Editor (Dashboard, Seite, Karten, geladene Kartentypen)
 - Abschnittsbreite (column_span) wird an die Spaltenzahl der Seite angepasst

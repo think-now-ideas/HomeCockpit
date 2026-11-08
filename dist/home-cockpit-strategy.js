@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.3.4 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.3.5 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
  *
  * Neu in 0.3: feste Seiten im Editor bearbeitbar (Karten verschieben, bearbeiten, hinzufügen),
@@ -38,7 +38,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.4";
+const VERSION = "0.3.5";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -500,6 +500,15 @@ function roomBlocks(config) {
 // ---------------------------------------------------------------------------
 
 const BLOCK_CARD = "custom:home-cockpit-block";
+
+/** Karten, die sich als Pop-up in die Seite einhängen (dürfen nicht in die Editor-Vorschau). */
+function isPopupCard(c) {
+  if (!c || typeof c !== "object") return false;
+  if (c.type === "custom:bubble-card" && (c.card_type === "pop-up" || c.hash)) return true;
+  if (/pop-?up|browser-mod/i.test(String(c.type || "")) && c.type !== "custom:mushroom-template-card") return true;
+  // Stapel, die ein Pop-up enthalten, ebenfalls nicht aufbauen
+  return Array.isArray(c.cards) && c.cards.some(isPopupCard);
+}
 
 /**
  * Verknüpfte Seite: { link: { dashboard: "internet-status", path: "internet" }, title?, path?, icon?, subview? }
@@ -1771,6 +1780,16 @@ class HomeCockpitEditor extends HTMLElement {
     if (token !== this._pvToken) return;
     el.innerHTML = "";
     for (const conf of cards) {
+      // Pop-up-Karten (z. B. Bubble Card) greifen beim Aufbau in die ganze Seite ein und blenden den
+      // Editor aus → in der Vorschau nur als Platzhalter zeigen. Im Dashboard funktionieren sie normal.
+      if (isPopupCard(conf)) {
+        const ph = document.createElement("div");
+        ph.className = "pvwrap";
+        ph.innerHTML = `<div class="col" style="padding:10px;border-style:dashed"><b>Pop-up: ${esc(conf.name || conf.title || conf.hash || "")}</b>
+          <div class="small">${esc(conf.hash || "")} · ${esc(conf.type)} – öffnet sich im Dashboard, in der Vorschau nur als Platzhalter</div></div>`;
+        el.appendChild(ph);
+        continue;
+      }
       const wrap = document.createElement("div");
       wrap.className = "pvwrap" + (conf.type === "tile" || conf.type === "button" ? " half" : "");
       let card;

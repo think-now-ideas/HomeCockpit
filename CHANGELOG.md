@@ -1,5 +1,11 @@
 # Änderungen
 
+## 0.3.2 – 08.11.2026
+- Bestand übernehmen: „Nur fehlende Seiten ergänzen“ – bearbeitete feste Seiten bleiben erhalten
+- Menüseiten (z. B. „weiteres“) werden nicht mehr fälschlich als Etage erkannt
+- Pfad-Zuordnungen auf Seiten, die jetzt feste Seiten sind, werden entfernt
+- Räume auf Etagen, die nicht im Dashboard sind (z. B. Außenbereich), werden als feste Seite übernommen statt weggelassen
+
 ## 0.3.1 – 08.11.2026
 - Öffnen einer Karte im HA-Karteneditor zählt nicht mehr als „ungespeicherte Änderung“
 - Releases werden automatisch angelegt, sobald eine neue Version auf GitHub liegt

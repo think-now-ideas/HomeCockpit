@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.3.1 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.3.2 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
  *
  * Neu in 0.3: feste Seiten im Editor bearbeitbar (Karten verschieben, bearbeiten, hinzufügen),
@@ -38,7 +38,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.1";
+const VERSION = "0.3.2";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -1451,9 +1451,11 @@ class HomeCockpitEditor extends HTMLElement {
       <div class="hint">Liest ein bestehendes Dashboard. Seiten, die zu einer Etage oder einem Raum passen, erzeugt HomeCockpit künftig selbst; alles andere wird als feste Seite übernommen. Navigationsknöpfe werden auf dieses Dashboard umgebogen. Erst „Speichern“ schreibt etwas.</div>
       <div class="row"><label for="im-d">Dashboard</label><select id="im-d" data-imp="dash">${ds.map((d) =>
         `<option value="${esc(d.url_path ?? "")}" ${String(d.url_path ?? "") === String(imp.url ?? "") ? "selected" : ""}>${esc(d.title)}</option>`).join("")}</select></div>
-      ${imp.rows && imp.rows.length ? `<table><tr><th>Seite</th><th>Erkannt</th><th>Übernehmen als</th></tr>${imp.rows.map((r, i) =>
+      ${imp.rows && imp.rows.length ? `<div class="row"><label style="min-width:0"><input type="checkbox" data-imp="merge" ${imp.merge !== false ? "checked" : ""} style="width:auto;min-height:0">
+        Nur <b>fehlende</b> Seiten ergänzen – schon übernommene (und von dir bearbeitete) Seiten bleiben unverändert</label></div>
+      <table><tr><th>Seite</th><th>Erkannt</th><th>Übernehmen als</th></tr>${imp.rows.map((r, i) =>
         `<tr><td>${esc(r.title)}<div class="small">/${esc(r.path)}</div></td><td class="small">${esc(r.why)}</td><td>${sel(r, i)}</td></tr>`).join("")}</table>
-        <div class="row"><button class="b pri" data-act="applyImport">Übernehmen</button><span class="small">ersetzt „Start & Handseiten“ und eigene Pfade</span></div>`
+        <div class="row"><button class="b pri" data-act="applyImport">Übernehmen</button><span class="small">${imp.merge !== false ? "ergänzt nur fehlende Seiten" : "ersetzt alle festen Seiten"}</span></div>`
         : `<div class="small">Keine Seiten gefunden (oder Dashboard ist selbst eine Strategie).</div>`}`;
   }
 
@@ -1461,6 +1463,8 @@ class HomeCockpitEditor extends HTMLElement {
     if (!conf || !Array.isArray(conf.views)) return [];
     const floors = Object.values(this._hass.floors || {});
     const areas = Object.values(this._hass.areas || {});
+    // Etagen, die dieses Dashboard tatsächlich erzeugt (Einstellung „Etagen“)
+    const shown = new Set(buildLayout(this._cfg, this._hass).floors.map((f) => f.floor_id));
     return conf.views.map((v) => {
       const title = v.title || v.path || "";
       const keys = [slug(title), slug(v.path || ""), lower(v.path || "")];
@@ -1482,20 +1486,25 @@ class HomeCockpitEditor extends HTMLElement {
       // Reine Knopf-Seite, deren Ziele Räume EINER Etage sind → diese Etage
       if (!f && navOnly) {
         const count = {};
-        nav.forEach((c) => {
+        const homeLike = (c) => /(^|\/)(tablet-home|home|uebersicht|lovelace)$/.test(String(c.tap_action.navigation_path));
+        const realNav = nav.filter((c) => !homeLike(c));
+        realNav.forEach((c) => {
           const last = lower(String(c.tap_action.navigation_path).split("/").pop());
           const ar = areas.find((x) => slug(x.name) === last || lower(x.area_id) === last || slug(byArea(this._cfg.paths, x) || "") === last);
           if (ar && ar.floor_id) count[ar.floor_id] = (count[ar.floor_id] || 0) + 1;
         });
         const best = Object.entries(count).sort((x, y) => y[1] - x[1])[0];
-        if (best && best[1] >= 2) f = floors.find((x) => x.floor_id === best[0]);
+        // nur wenn mind. 2 und mind. 70 % der Knöpfe Räume dieser Etage sind (sonst z. B. Menüseite „weiteres“)
+        if (best && best[1] >= 2 && best[1] >= realNav.length * 0.7) f = floors.find((x) => x.floor_id === best[0]);
       }
       let action = "hand", why = "eigene Seite";
       if (v.strategy) { action = "skip"; why = "Strategie-Seite"; }
       else if (v.type === "panel" && asList(v.cards).some((c) => c.type === "custom:home-cockpit-editor")) { action = "skip"; why = "HomeCockpit-Editor"; }
       else if (empty) { action = "skip"; why = "leer"; }
+      else if (f && navOnly && !shown.has(f.floor_id)) { why = `Etage ${f.name} ist nicht im Dashboard – als Handseite`; }
       else if (f && navOnly) { action = "gen"; why = `Etage ${f.name} (nur Raumknöpfe)`; }
       else if (f) { why = `Etage ${f.name} mit eigenen Inhalten – als Handseite`; }
+      else if (a && a.floor_id && !shown.has(a.floor_id)) { why = `Raum ${a.name} – Etage nicht im Dashboard, als Handseite`; }
       else if (a && a.floor_id) { action = "gen"; why = `Raum ${a.name}`; }
       else if (a) { why = `Bereich ${a.name} ohne Etage – als Handseite`; }
       return { title, path: v.path || slug(title), view: v, action, why, area: a, floor: f };
@@ -1508,12 +1517,25 @@ class HomeCockpitEditor extends HTMLElement {
     const newBase = "/" + (this._urlPath || "lovelace") + "/";
     const fix = (v) => JSON.parse(JSON.stringify(v).split(`"${oldBase}`).join(`"${newBase}`));
     const hand = imp.rows.filter((r) => r.action === "hand").map((r) => fix(r.view));
-    c.views_before = hand.slice(0, 1);
-    c.views_after = hand.slice(1);
-    c.home_path = hand.length ? hand[0].path : c.home_path;
+    const existing = new Set([...pathsOf(c.views_before), ...pathsOf(c.views_after)]);
+    const merge = imp.merge !== false && existing.size > 0;
+    if (merge) {
+      // nur fehlende Seiten hinten anhängen, bearbeitete Seiten bleiben
+      const add = hand.filter((v) => !existing.has(v.path));
+      c.views_after = [...asList(c.views_after), ...add];
+      this._lastImportCount = add.length;
+    } else {
+      c.views_before = hand.slice(0, 1);
+      c.views_after = hand.slice(1);
+      c.home_path = hand.length ? hand[0].path : c.home_path;
+      this._lastImportCount = hand.length;
+    }
     c.dashboard_path = "/" + (this._urlPath || "lovelace");
     // Alte Pfade beibehalten, damit Knöpfe auf den Handseiten weiter funktionieren
     const paths = { ...(c.paths || {}) };
+    // Pfade, die jetzt eine feste Seite sind, dürfen keiner Etage/keinem Raum mehr zugeordnet sein
+    const handNow = new Set([...pathsOf(c.views_before), ...pathsOf(c.views_after)]);
+    Object.keys(paths).forEach((k) => { if (handNow.has(paths[k])) delete paths[k]; });
     imp.rows.filter((r) => r.action === "gen").forEach((r) => {
       const name = r.floor && !r.area ? r.floor.name : r.area ? r.area.name : r.floor ? r.floor.name : null;
       if (name && r.path && r.path !== slug(name)) paths[name] = r.path;
@@ -1522,7 +1544,7 @@ class HomeCockpitEditor extends HTMLElement {
     this._setDirty();
     this._sel = { kind: "hand" };
     this._renderAll();
-    this._status(`${hand.length} Seiten übernommen – noch nicht gespeichert`);
+    this._status(`${this._lastImportCount} Seiten übernommen – noch nicht gespeichert`);
   }
 
   // ------------------------------------------------------------------ Nicht zugeordnet
@@ -1916,6 +1938,7 @@ class HomeCockpitEditor extends HTMLElement {
     if (t.dataset.pv === "area") { this._sampleArea = t.value; this._renderPreview(); return; }
     if (t.dataset.pick === "dash") { this._pick.url = t.value || null; await this._pickLoad(); this._renderPicker(""); return; }
     if (t.dataset.imp === "dash") { this._imp = { url: t.value || null, rows: null }; this._renderMain(); return; }
+    if (t.dataset.imp === "merge") { this._imp.merge = t.checked; this._renderMain(); return; }
     if (t.dataset.imp !== undefined && t.dataset.imp !== "dash") { this._imp.rows[+t.dataset.imp].action = t.value; return; }
     if (t.dataset.field === "cardsel") {
       const b = this._block();

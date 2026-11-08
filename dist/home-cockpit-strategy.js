@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.3.3 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.3.4 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
  *
  * Neu in 0.3: feste Seiten im Editor bearbeitbar (Karten verschieben, bearbeiten, hinzufügen),
@@ -38,7 +38,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.3";
+const VERSION = "0.3.4";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -512,18 +512,21 @@ async function resolveLinked(v, hass) {
   let conf = _linkCache.get(key);
   if (!conf || Date.now() - conf.at > 30_000) {
     try { conf = { at: Date.now(), data: await hass.callWS({ type: "lovelace/config", url_path: v.link.dashboard || null }) }; }
-    catch (e) { conf = { at: Date.now(), data: null }; }
+    catch (e) { conf = { at: Date.now(), data: null, error: (e && (e.message || e.code)) || String(e) }; }
     _linkCache.set(key, conf);
   }
   const views = conf.data && Array.isArray(conf.data.views) ? conf.data.views : [];
   const src = views.find((x) => x.path === v.link.path) || views[v.link.index ?? -1];
   const meta = { title: v.title, path: v.path, icon: v.icon, ...(v.subview !== undefined ? { subview: v.subview } : {}) };
   Object.keys(meta).forEach((k) => meta[k] === undefined && delete meta[k]);
-  if (!src) {
-    return { ...meta, type: "sections", sections: [{ type: "grid", cards: [{ type: "markdown",
-      content: `⚠️ Verknüpfte Seite **${v.link.path}** im Dashboard **${v.link.dashboard || "Übersicht"}** nicht gefunden.` }] }] };
-  }
-  return { ...clone(src), ...meta };
+  const warn = (txt) => ({ ...meta, type: "sections", sections: [{ type: "grid", cards: [{ type: "markdown", content: "⚠️ " + txt }] }] });
+  if (conf.error) return warn(`Dashboard **${v.link.dashboard || "Übersicht"}** nicht lesbar: ${conf.error}`);
+  if (conf.data && conf.data.strategy) return warn(`Dashboard **${v.link.dashboard}** ist selbst eine Strategie – verknüpfen geht nur mit normalen Dashboards.`);
+  if (!src) return warn(`Seite **${v.link.path}** im Dashboard **${v.link.dashboard || "Übersicht"}** nicht gefunden. Vorhanden: ${views.map((x) => x.path || x.title).join(", ") || "keine"}`);
+  const out = { ...clone(src), ...meta };
+  // Abschnitte ohne Breite der Zielseite anpassen (column_span größer als Spalten → leer bei manchen HA-Versionen)
+  if (Array.isArray(out.sections) && out.max_columns) out.sections = out.sections.map((x) => (x.column_span > out.max_columns ? { ...x, column_span: out.max_columns } : x));
+  return out;
 }
 
 /** Ersetzt in einer festen Seite jede Baustein-Karte durch die erzeugten Karten. */
@@ -1284,7 +1287,8 @@ class HomeCockpitEditor extends HTMLElement {
         <div class="row"><label for="hp-p">Pfad</label><input id="hp-p" data-hpfield="path" value="${esc(v.path || "")}"></div>
         ${this._iconField("hpfield", v.icon)}
         <div class="row"><label><input type="checkbox" data-hpfield="subview" ${v.subview ? "checked" : ""} style="width:auto;min-height:0"> Unterseite (kein Tab)</label></div>
-        <div class="row"><button class="b" data-act="linkToCopy">In feste Seite umwandeln (Kopie zum Bearbeiten)</button></div>`;
+        <div class="row"><button class="b" data-act="linkTest">Verknüpfung prüfen</button><button class="b" data-act="linkToCopy">In feste Seite umwandeln (Kopie zum Bearbeiten)</button></div>
+        <div id="linkdiag"></div>`;
     }
     const conts = this._containers(v);
     const isSections = Array.isArray(v.sections);
@@ -1964,6 +1968,28 @@ class HomeCockpitEditor extends HTMLElement {
         const slot = t.closest(".iconslot"), input = slot.querySelector("input");
         input.value = d.icon; input.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
         slot.querySelector(".icongrid").hidden = true; break;
+      }
+      case "linkTest": {
+        const v = this._hview(), box = this._root.querySelector("#linkdiag"), out = [];
+        try {
+          const conf = await this._hass.callWS({ type: "lovelace/config", url_path: v.link.dashboard || null });
+          out.push(["Dashboard „" + (v.link.dashboard || "Übersicht") + "“", "gefunden" + (conf.strategy ? " – ist aber eine Strategie" : "")]);
+          const views = asList(conf.views);
+          out.push(["Seiten darin", views.map((x) => x.path || x.title).join(", ") || "keine"]);
+          const src = views.find((x) => x.path === v.link.path);
+          out.push(["Seite „" + v.link.path + "“", src ? "gefunden" : "NICHT gefunden"]);
+          if (src) {
+            const types = [];
+            const walk = (n) => { if (Array.isArray(n)) n.forEach(walk); else if (n && typeof n === "object") { if (n.type) types.push(n.type); Object.values(n).forEach(walk); } };
+            walk([src.sections, src.cards]);
+            out.push(["Ansichtsart", (src.type || "masonry") + (src.max_columns ? ", " + src.max_columns + " Spalten" : "")]);
+            out.push(["Karten", String(types.filter((t) => !["grid"].includes(t) || true).length)]);
+            const custom = [...new Set(types.filter((t) => t.startsWith("custom:")))];
+            out.push(["Eigene Kartentypen", custom.map((t) => t + (customElements.get(t.slice(7)) ? " ✓ geladen" : " ✗ NICHT geladen")).join(" · ") || "keine"]);
+          }
+        } catch (e) { out.push(["Fehler", (e && (e.message || e.code)) || String(e)]); }
+        box.innerHTML = out.map(([k, val]) => `<div style="background:var(--hc-soft);border-radius:8px;padding:6px 9px;margin-top:5px"><div class="small">${esc(k)}</div>${esc(val)}</div>`).join("");
+        break;
       }
       case "linkToCopy": {
         const s = this._sel, v = this._hview();

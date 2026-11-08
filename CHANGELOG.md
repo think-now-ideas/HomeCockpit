@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.3.4 – 08.11.2026
+- Verknüpfte Seiten: Fehler werden angezeigt statt leerer Seite; „Verknüpfung prüfen“ im Editor (Dashboard, Seite, Karten, geladene Kartentypen)
+- Abschnittsbreite (column_span) wird an die Spaltenzahl der Seite angepasst
+
 ## 0.3.3 – 08.11.2026
 - Symbol-Auswahl mit Vorschau (HA-Symbolsuche, wenn verfügbar; sonst Liste häufiger Symbole)
 - Verknüpfte Seiten: eine Seite aus einem anderen Dashboard live einbinden (z. B. LineGuard „Internet“) – gepflegt wird sie dort

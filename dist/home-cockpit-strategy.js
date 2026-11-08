@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.2.1 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
+ * Version 0.2.2 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
  * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
  *
  * Neu in 0.2: Editor-Ansicht „⚙ HomeCockpit“ (nur Admins), eigene Seiten (`pages`),
@@ -34,7 +34,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.2.1";
+const VERSION = "0.2.2";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -1150,9 +1150,9 @@ class HomeCockpitEditor extends HTMLElement {
 
   _rawForm() {
     return `<div><div class="small">Werkzeug</div><div style="font-size:20px;font-weight:700">Bauplan ansehen</div></div>
-      <div class="hint">So steht der Bauplan in der Dashboard-Konfiguration. Zum Sichern kopieren.</div>
-      <div class="row"><button class="b" data-act="copyRaw">Kopieren</button></div>
-      <pre id="raw">${esc(JSON.stringify(this._cfg, null, 2))}</pre>`;
+      <div class="hint">So steht der Bauplan in der Dashboard-Konfiguration. Zum Sichern kopieren oder als Datei laden.</div>
+      <div class="row"><button class="b" data-act="copyRaw">Kopieren</button><button class="b" data-act="downloadRaw">Als Datei laden</button></div>
+      <textarea id="raw" readonly style="min-height:480px">${esc(JSON.stringify(this._cfg, null, 2))}</textarea>`;
   }
 
   // ------------------------------------------------------------------ Vorlage aus Karte
@@ -1484,10 +1484,29 @@ class HomeCockpitEditor extends HTMLElement {
       case "applyImport": this._applyImport(); break;
       case "excludeGlobal": c.exclude = [...asList(c.exclude), d.e]; this._setDirty(); this._renderMain(); break;
       case "hideHere": { const b = this._block(); b.exclude = [...asList(b.exclude), d.e]; this._setDirty(); this._renderPreview(); break; }
-      case "copyRaw":
-        try { await navigator.clipboard.writeText(JSON.stringify(c, null, 2)); this._status("Kopiert"); }
-        catch (e) { this._status("Kopieren nicht erlaubt – Text markieren"); }
+      case "copyRaw": {
+        // navigator.clipboard gibt es nur über HTTPS; im Heimnetz (http://…:8123) und in der App
+        // daher Rückfall auf Markieren + execCommand.
+        const text = JSON.stringify(c, null, 2);
+        let ok = false;
+        try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); ok = true; } } catch (e) { ok = false; }
+        if (!ok) {
+          const ta = this._root.querySelector("#raw");
+          try { ta.focus(); ta.select(); ta.setSelectionRange(0, text.length); ok = document.execCommand("copy"); } catch (e) { ok = false; }
+        }
+        this._status(ok ? "Kopiert ✓" : "Bitte jetzt „Kopieren“ aus dem Menü wählen (Text ist markiert)");
         break;
+      }
+      case "downloadRaw": {
+        const blob = new Blob([JSON.stringify(c, null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `homecockpit-bauplan-${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        this._status("Datei wird geladen");
+        break;
+      }
       case "save": await this._save(); break;
       case "undo": this._undo(); break;
     }

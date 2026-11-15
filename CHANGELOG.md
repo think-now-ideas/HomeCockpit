@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.11 – 15.11.2026
+- Nicht zugeordnet (Editor): Gruppen sind eingeklappt (nur Überschrift mit Anzahl, antippen zum Aufklappen)
+- Neu: „Liste herunterladen“ – alle fehlenden und ignorierten Entitäten als CSV (Grund, Domäne, Geräteklasse, Integration, Bereich, Zustand)
+- Entitäten der Integration Home Rhythm zählen nicht mehr als „nicht zugeordnet“ – Home Rhythm zeigt sie in seinen Karten
+
 ## 0.3.10 – 15.11.2026
 - **Nicht zugeordnet aufgeräumt:**
   - System-Entitäten (Personen, Automationen, Skripte, Szenen, Timer, TTS, Updates, Geräte-Tracker …) zählen nicht mehr mit; die Seite nennt nur ihre Anzahl.

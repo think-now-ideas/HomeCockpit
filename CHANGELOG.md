@@ -1,5 +1,13 @@
 # Änderungen
 
+## 0.3.10 – 15.11.2026
+- **Nicht zugeordnet aufgeräumt:**
+  - System-Entitäten (Personen, Automationen, Skripte, Szenen, Timer, TTS, Updates, Geräte-Tracker …) zählen nicht mehr mit; die Seite nennt nur ihre Anzahl.
+  - Neue Gruppe **„verwaist“** ganz oben: nicht verfügbar oder unbekannt und ohne Bereich – meist Reste, die man in HA löschen kann.
+  - **Ganze Gruppen ignorieren** im Editor (Werkzeuge › Nicht zugeordnet): Integration oder Domäne mit einem Klick (die häufigsten werden vorgeschlagen), dazu Stichwörter. Wieder zählen mit „×“. Gespeichert als `ignore: [{ integration: unifi }, …]`; Bausteine sind davon nicht betroffen.
+- **Raumknöpfe ohne Heizung/Temperatur** sind jetzt schmale Kacheln wie die anderen statt großer Schaltflächen.
+- **Verlauf in Home-Rhythm-Räumen:** Ist dort kein Raumfühler eingestellt, nimmt der Verlauf nie den eingebauten Fühler eines Thermostats (auch nicht von noch nicht gesteuerten), sondern einen eigenen Raumfühler.
+
 ## 0.3.9 – 15.11.2026
 - **Home Rhythm (ab 0.9.13):** Räume, die Home Rhythm kennt, bekommen
   - auf der Etagenseite den Raumknopf von Home Rhythm (Symbol → Bedien-Fenster, übrige Fläche → Raumseite),

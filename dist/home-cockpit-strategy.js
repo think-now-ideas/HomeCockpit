@@ -1,7 +1,7 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.3.9 · Stand 15.11.2026
+ * Version 0.3.10 · Stand 15.11.2026
  *
  * Neu in 0.3.9: Home Rhythm (ab 0.9.13) – Räume, die Home Rhythm kennt, bekommen dessen Raumknopf
  * (`layout: knopf`) und rechts die Raumkarte (`layout: tablet`) mit dem Verlauf des Raumfühlers.
@@ -41,7 +41,7 @@
  * und ggf. die Raumliste von Home Rhythm per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.9";
+const VERSION = "0.3.10";
 const LOGO = `<svg class="hclogo" aria-label="HomeCockpit" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="10 20 2790 700"><path fill="#00baba" d="M777.09,701.32l-4.58-320.59,159.85,2.4L476.11,27.59,19.86,383.13l131.46,3.42,5.88,315.74L777.09,701.32ZM469.2,409.08h-92.66v-92.66h92.66V409.08ZM469.2,302.61h-92.66v-92.64h92.66V302.61ZM575.67,409.08h-92.65v-92.66h92.65V409.08ZM575.67,302.61h-92.65v-92.64h92.65V302.61Z"/><g fill="#fff" fill-rule="evenodd"><path d="M652.63,653.71h-352.49c-2.67,0-4.83-2.16-4.83-4.83v-186.81c0-2.67,2.16-4.83,4.83-4.83h352.49c2.67,0,4.83,2.16,4.83,4.83v186.81C657.46,651.55,655.3,653.71,652.63,653.71H652.63ZM304.97,644.04h342.83v-177.14h-342.83V644.04Z"/><path d="M447.04,536.29h-99.64c-2.67,0-4.83-2.16-4.83-4.83,0-30.14,24.52-54.66,54.65-54.66s54.66,24.52,54.66,54.66C451.88,534.13,449.71,536.29,447.04,536.29H447.04ZM352.5,526.62h89.45c-2.42-22.54-21.55-40.15-44.72-40.15C374.05,486.47,354.91,504.08,352.5,526.62Z"/><path d="M397.22,500.29c-2.67,0-4.83-2.16-4.83-4.83v-13.82c0-2.67,2.16-4.84,4.83-4.84s4.84,2.17,4.84,4.84v13.82C402.06,498.13,399.89,500.29,397.22,500.29Z"/><path d="M422.68,510.84c-1.24,0-2.48-.47-3.42-1.42-1.89-1.89-1.89-4.95,0-6.83l9.77-9.78c1.89-1.89,4.95-1.89,6.84,0,1.88,1.89,1.88,4.95,0,6.84l-9.78,9.77C425.15,510.37,423.91,510.84,422.68,510.84Z"/><path d="M371.77,510.84c-1.24,0-2.47-.47-3.42-1.42l-9.77-9.77c-1.89-1.89-1.89-4.95,0-6.84,1.89-1.89,4.95-1.89,6.83,0l9.78,9.78c1.89,1.88,1.89,4.94,0,6.83C374.24,510.36,373.01,510.84,371.77,510.84Z"/><path d="M390.22,536.29c-1.24,0-2.48-.47-3.42-1.42-1.89-1.88-1.89-4.94,0-6.83l14.01-14.02c1.89-1.88,4.95-1.88,6.84,0,1.89,1.89,1.89,4.95,0,6.84l-14.02,14.01C392.69,535.82,391.45,536.29,390.22,536.29Z"/><path d="M605.36,536.29h-99.63c-2.67,0-4.84-2.16-4.84-4.83,0-30.14,24.52-54.66,54.66-54.66s54.65,24.52,54.65,54.66C610.2,534.13,608.03,536.29,605.36,536.29H605.36ZM510.82,526.62h89.45c-2.42-22.54-21.55-40.15-44.73-40.15C532.37,486.47,513.24,504.08,510.82,526.62Z"/><path d="M555.55,500.29c-2.67,0-4.84-2.16-4.84-4.83v-13.82c0-2.67,2.17-4.84,4.84-4.84s4.83,2.17,4.83,4.84v13.82C560.38,498.13,558.21,500.29,555.55,500.29Z"/><path d="M581,510.84c-1.24,0-2.47-.47-3.42-1.42-1.88-1.89-1.88-4.95,0-6.83l9.78-9.78c1.88-1.89,4.94-1.89,6.83,0s1.89,4.95,0,6.84l-9.77,9.77C583.47,510.37,582.23,510.84,581,510.84Z"/><path d="M530.09,510.84c-1.24,0-2.47-.47-3.42-1.42l-9.77-9.77c-1.89-1.89-1.89-4.95,0-6.84,1.89-1.89,4.95-1.89,6.83,0l9.78,9.78c1.89,1.88,1.89,4.94,0,6.83C532.57,510.36,531.33,510.84,530.09,510.84Z"/><path d="M562.55,536.29c-1.23,0-2.47-.47-3.41-1.42l-14.02-14.01c-1.89-1.89-1.89-4.95,0-6.84,1.89-1.88,4.95-1.88,6.83,0l14.02,14.02c1.89,1.89,1.89,4.95,0,6.83C565.03,535.82,563.79,536.29,562.55,536.29Z"/><path d="M363.75,634.14c-2.67,0-4.84-2.16-4.84-4.83v-20.8c0-2.66,2.17-4.83,4.84-4.83s4.83,2.17,4.83,4.83v20.8C368.58,631.98,366.41,634.14,363.75,634.14H363.75ZM363.75,580.67c-2.67,0-4.84-2.17-4.84-4.84v-20.79c0-2.67,2.17-4.83,4.84-4.83s4.83,2.16,4.83,4.83v20.79C368.58,578.5,366.41,580.67,363.75,580.67Z"/><path d="M363.75,613.35c-11.68,0-21.18-9.5-21.18-21.18s9.5-21.17,21.18-21.17,21.17,9.5,21.17,21.17S375.42,613.35,363.75,613.35H363.75ZM363.75,580.67c-6.35,0-11.51,5.16-11.51,11.5s5.16,11.51,11.51,11.51,11.5-5.16,11.5-11.51S370.09,580.67,363.75,580.67Z"/><path d="M413.64,634.14c-2.67,0-4.83-2.16-4.83-4.83v-20.8c0-2.66,2.16-4.83,4.83-4.83s4.83,2.17,4.83,4.83v20.8C418.47,631.98,416.31,634.14,413.64,634.14H413.64ZM413.64,580.67c-2.67,0-4.83-2.17-4.83-4.84v-20.79c0-2.67,2.16-4.83,4.83-4.83s4.83,2.16,4.83,4.83v20.79C418.47,578.5,416.31,580.67,413.64,580.67Z"/><path d="M413.64,613.35c-11.67,0-21.17-9.5-21.17-21.18s9.5-21.17,21.17-21.17,21.17,9.5,21.17,21.17S425.31,613.35,413.64,613.35H413.64ZM413.64,580.67c-6.35,0-11.51,5.16-11.51,11.5s5.16,11.51,11.51,11.51,11.51-5.16,11.51-11.51S419.98,580.67,413.64,580.67Z"/><path d="M546.18,583.08h-40.45c-2.67,0-4.84-2.16-4.84-4.83v-23.21c0-2.67,2.17-4.84,4.84-4.84h40.45c2.67,0,4.83,2.17,4.83,4.84v23.21C551.01,580.92,548.85,583.08,546.18,583.08H546.18ZM510.56,573.42h30.79v-13.55h-30.79S510.56,573.42,510.56,573.42Z"/><path d="M605.36,583.08h-40.45c-2.67,0-4.83-2.16-4.83-4.83v-23.21c0-2.67,2.16-4.84,4.83-4.84h40.45c2.67,0,4.84,2.17,4.84,4.84v23.21C610.2,580.92,608.03,583.08,605.36,583.08H605.36ZM569.75,573.42h30.78v-13.55h-30.78S569.75,573.42,569.75,573.42Z"/><path d="M546.18,628.18h-40.45c-2.67,0-4.84-2.17-4.84-4.84v-23.21c0-2.67,2.17-4.83,4.84-4.83h40.45c2.67,0,4.83,2.16,4.83,4.83v23.21C551.01,626.01,548.85,628.18,546.18,628.18H546.18ZM510.56,618.51h30.79v-13.54h-30.79V618.51Z"/><path d="M605.36,628.18h-40.45c-2.67,0-4.83-2.17-4.83-4.84v-23.21c0-2.67,2.16-4.83,4.83-4.83h40.45c2.67,0,4.84,2.16,4.84,4.83v23.21C610.2,626.01,608.03,628.18,605.36,628.18H605.36ZM569.75,618.51h30.78v-13.54h-30.78V618.51Z"/></g><g fill="currentColor"><path d="M859.31,442.82v108.35h135.71v-108.35h17.51v245.88h-17.51v-122.94h-135.71v122.94h-17.51v-245.88H859.31Z"/><path d="M1114.31,692.72c-45.24,0-80.26-35.39-80.26-90.11,0-59.83,39.4-93.03,82.81-93.03,48.52,0,81.35,36.48,81.35,90.11,0,64.94-44.87,93.03-83.54,93.03H1114.31ZM1115.4,678.13c36.48,0,65.3-32.84,65.3-77.71,0-32.1-17.87-76.24-64.2-76.24s-64.94,39.76-64.94,77.34c0,43.77,27.73,76.61,63.48,76.61H1115.4Z"/><path d="M1218.65,555.55c0-16.05-.37-28.09-1.46-41.95h16.41l1.1,30.64h.73c11.31-20.06,28.09-34.66,56.91-34.66,24.07,0,42.68,16.06,50.34,37.94h.73c4.74-10.21,11.31-18.24,17.88-23.71,11.3-9.12,22.98-14.23,41.58-14.23,17.15,0,57.28,9.49,57.28,75.88v103.24h-17.51v-101.78c0-39.4-15.32-62.74-45.6-62.74-21.89,0-39.04,16.41-45.97,34.65-1.46,5.11-2.92,10.95-2.92,17.51v112.36h-17.51v-109.8c0-31.38-14.96-54.72-43.41-54.72-23.35,0-41.95,18.97-48.52,39.4-1.46,5.1-2.55,10.94-2.55,17.14v107.98h-17.51V555.55Z"/><path d="M1496.99,599.33c0,55.81,30.65,78.07,66.76,78.07,25.54,0,38.67-5.11,48.52-9.86l4.38,13.5c-6.57,3.65-24.44,11.31-55.09,11.31-50.34,0-81.71-36.48-81.71-87.92,0-58.37,33.56-94.85,78.8-94.85,57.27,0,68.21,54,68.21,79.17,0,4.74,0,7.29-.73,10.58H1496.99ZM1608.62,585.46c.37-24.44-9.85-61.28-52.16-61.28-38.67,0-55.09,34.29-58.37,61.28H1608.62Z"/><path d="M1837.87,681.41c-10.58,5.11-33.93,10.94-63.84,10.94-78.07,0-125.5-48.88-125.5-123.67,0-80.98,56.55-129.5,131.7-129.5,29.55,0,50.34,5.83,59.46,10.58l-9.48,35.75c-11.68-5.11-28.09-9.49-48.16-9.49-49.98,0-86.09,31.37-86.09,90.47,0,54,31.37,88.29,85.73,88.29,17.87,0,36.84-3.65,48.88-8.76L1837.87,681.41Z"/><path d="M1938.56,692.72c-49.98,0-89.02-34.3-89.02-91.57s38.31-94.12,91.93-94.12,88.29,37.21,88.29,91.2c0,65.3-45.97,94.49-90.84,94.49H1938.56ZM1940.02,660.25c25.53,0,43.41-24.81,43.41-60.92,0-27.73-12.41-59.83-43.05-59.83s-44.51,31.01-44.51,60.56c0,34.29,17.15,60.19,43.78,60.19H1940.02Z"/><path d="M2191.33,683.23c-9.48,4.38-28.09,9.12-50.34,9.12-55.45,0-91.57-35.75-91.57-90.83s36.48-94.49,98.87-94.49c16.41,0,33.19,3.65,43.41,8.03l-8.03,33.92c-7.29-3.64-17.87-6.93-33.93-6.93-34.29,0-54.72,25.17-54.35,57.64,0,36.48,23.71,57.28,54.35,57.28,15.33,0,26.64-3.29,35.39-6.94L2191.33,683.23Z"/><path d="M2260.39,589.11h.73c4.38-6.93,9.49-14.59,13.86-20.79l43.42-57.28h53.99l-66.03,72.6,75.15,105.06h-55.09l-51.07-78.43-14.96,17.88v60.55h-44.87v-259.37h44.87V589.11Z"/><path d="M2398.54,570.14c0-23.35-.73-42.32-1.46-59.1h39.4l2.19,27.36h.73c13.13-20.06,33.93-31.37,60.92-31.37,40.86,0,74.79,35.02,74.79,90.47,0,64.21-40.5,95.22-80.99,95.22-22.25,0-40.86-9.49-49.98-23.72h-.73v91.94h-44.87V570.14ZM2443.41,614.28c0,4.38.37,8.39,1.1,12.41,4.74,18.24,20.43,31.37,39.76,31.37,28.46,0,45.24-23.71,45.24-58.73,0-31.38-15.32-56.91-44.14-56.91-18.61,0-35.76,13.49-40.5,33.19-.73,3.65-1.46,7.66-1.46,11.31V614.28Z"/><path d="M2626.73,485.51c-14.96,0-24.81-10.95-24.81-24.08,0-13.86,10.22-24.44,25.17-24.44s24.81,10.58,25.18,24.44c0,13.13-9.85,24.08-25.18,24.08H2626.73ZM2604.48,688.7v-177.66h44.87v177.66H2604.48Z"/><path d="M2740.22,465.44v45.6h42.68v33.57h-42.68v78.06c0,21.89,5.84,32.84,22.98,32.84,8.03,0,12.41-.37,17.51-1.83l.73,33.93c-6.56,2.55-18.6,4.74-32.46,4.74-16.79,0-30.28-5.47-38.67-14.59-9.85-10.22-14.23-26.63-14.23-49.98v-83.17h-25.17v-33.57h25.17v-33.19L2740.22,465.44Z"/></g></svg>`;
 const LOG = "[home-cockpit]";
 
@@ -197,6 +197,7 @@ function collectEntities(hass) {
       name: st.attributes.friendly_name || entityId,
       hidden: !!ent.hidden,
       category: ent.entity_category || null,
+      state: st.state,
     });
   }
   return out;
@@ -324,6 +325,24 @@ function matchBlock(e, block, ctx) {
   if (asList(block.not).some((g) => matchGroup(e, g, ctx))) return false;
   return true;
 }
+
+/**
+ * Entitäten, die nie in einen Raum gehören (Personen, Automationen, Updates …).
+ * Sie zählen unter „Nicht zugeordnet“ nicht mit; Bausteine dürfen sie trotzdem zeigen.
+ */
+const SYSTEM_DOMAINS = new Set(["person", "zone", "sun", "tts", "stt", "conversation", "wake_word", "update",
+  "automation", "script", "scene", "timer", "counter", "schedule", "todo", "calendar", "event", "notify",
+  "device_tracker", "ai_task", "image", "tag"]);
+/** Domänen, deren Zustand „unbekannt“ normal ist (nie gedrückt) – nie „verwaist“. */
+const STATELESS_DOMAINS = new Set(["button", "input_button", "scene", "event", "notify"]);
+
+/** Passt die Entität auf eine Regel aus `ignore` (nur für „Nicht zugeordnet“)? Gibt die Regel als Text zurück. */
+function ignoredWhy(e, config, ctx) {
+  const g = asList(config.ignore).find((x) => x && Object.keys(x).length && matchGroup(e, x, ctx));
+  if (!g) return null;
+  return "ignoriert: " + Object.entries(g).map(([k, v]) => `${(CRITERIA_TEXT[k] || k)} ${listText(v)}`).join(" + ");
+}
+const CRITERIA_TEXT = { integration: "Integration", domain: "Domäne", name_contains: "Stichwort", device_class: "Geräteklasse", label: "Label", area: "Bereich" };
 
 /** Grundausschluss: in HA ausgeblendet, Diagnose/Konfig, oder in `exclude` gelistet. */
 function excludedWhy(e, config) {
@@ -552,7 +571,10 @@ function planRoom(config, area, ctx, all, hr) {
   if (hr && !ownBlock) {
     const ctl = new Set([...asList(hr.climate_entities), ...asList(hr.ac_entities)]);
     const sensors = new Set(asList(hr.room_temp_entities));
-    const devs = new Set(all.filter((e) => ctl.has(e.entity_id) && e.device_id).map((e) => e.device_id));
+    // Geräte der Thermostate: die von Home Rhythm und alle Thermostate im Raum (auch noch nicht gesteuerte) –
+    // ihr eingebauter Fühler ist kein Raumfühler
+    const devs = new Set(all.filter((e) => (ctl.has(e.entity_id) || (e.domain === "climate" && e.area_id === area.area_id))
+      && e.device_id).map((e) => e.device_id));
     const isHr = (e) => !sensors.has(e.entity_id)
       && (ctl.has(e.entity_id) || e.domain === "climate" || (!!e.device_id && devs.has(e.device_id)));
     hrClaimed = ents.filter(isHr);
@@ -778,9 +800,14 @@ class HomeCockpitFloorViewStrategy extends HTMLElement {
       const lead = fixedLead || (leadEntity(inArea, parent, meters) || {}).entity_id;
       const nav = { action: "navigate", navigation_path: absPath(parent, a.path) };
       // Kachel zeigt den Zustand der Leitentität (z. B. „Heizen · 21 °C“), Tippen öffnet den Raum
-      return lead
-        ? { type: "tile", entity: lead, name: a.name, icon: a.icon, tap_action: nav,
-            icon_tap_action: nav, grid_options: { columns: 6, rows: 1 } }
+      if (lead) return { type: "tile", entity: lead, name: a.name, icon: a.icon, tap_action: nav,
+        icon_tap_action: nav, grid_options: { columns: 6, rows: 1 } };
+      // Ohne Leitgerät: trotzdem eine schmale Kachel wie die anderen Knöpfe (die HA-Schaltfläche wird
+      // zu hoch). Die Kachel braucht eine Entität – irgendeine aus dem Raum, Zustand ausgeblendet.
+      const any = inArea.find((e) => !excludedWhy(e, parent) && !SYSTEM_DOMAINS.has(e.domain));
+      return any
+        ? { type: "tile", entity: any.entity_id, name: a.name, icon: a.icon, hide_state: true, color: "disabled",
+            tap_action: nav, icon_tap_action: nav, hold_action: { action: "none" }, grid_options: { columns: 6, rows: 1 } }
         : { type: "button", name: a.name, icon: a.icon, show_state: false, tap_action: nav,
             grid_options: { columns: 6, rows: 1 } };
     });
@@ -939,7 +966,7 @@ async function explainAll(config, hass) {
       if (!placed.has(e.entity_id)) placed.set(e.entity_id, `Seite ${pg.title} › ${block.name}`);
     }));
   }
-  for (const e of all) {
+  for (let e of all) {
     let status = "shown", why = "";
     const info = areaInfo[e.area_id];
     const pl = placed.get(e.entity_id);
@@ -951,6 +978,11 @@ async function explainAll(config, hass) {
     }
     else if (onHand.has(e.entity_id)) { status = "hand"; why = "auf einer Handseite"; }
     else if (excludedWhy(e, config)) { status = "excluded"; why = excludedWhy(e, config); }
+    else if (SYSTEM_DOMAINS.has(e.domain)) { status = "system"; why = "System (" + e.domain + ")"; }
+    else if (ignoredWhy(e, config, ctx)) { status = "ignored"; why = ignoredWhy(e, config, ctx); }
+    else if (!e.area_id && ["unavailable", "unknown"].includes(e.state) && !STATELESS_DOMAINS.has(e.domain)) {
+      status = "missing"; why = "verwaist (nicht verfügbar oder unbekannt, kein Bereich)"; e = { ...e, orphan: true };
+    }
     else if (!e.area_id) { status = "missing"; why = "kein Bereich"; }
     else if (!e.floor_id && !info) { status = "missing"; why = "Bereich ohne Etage"; }
     else if (!info) { status = "missing"; why = "Etage nicht im Dashboard"; }
@@ -964,13 +996,15 @@ async function explainAll(config, hass) {
 class HomeCockpitUnassignedViewStrategy extends HTMLElement {
   static async generate(config, hass) {
     const parent = config.parent || {};
-    const missing = (await explainAll(parent, hass)).filter((e) => e.status === "missing");
+    const all = await explainAll(parent, hass);
+    const missing = all.filter((e) => e.status === "missing");
+    const nSys = all.filter((e) => e.status === "system").length, nIgn = all.filter((e) => e.status === "ignored").length;
     // Nach Grund gruppieren, damit man gezielt aufräumen kann
     const groups = {};
     missing.forEach((e) => (groups[e.why] = groups[e.why] || []).push(e));
     const MAX = 150;
     const sections = Object.entries(groups)
-      .sort((a, b) => b[1].length - a[1].length)
+      .sort((a, b) => (b[1][0].orphan ? 1 : 0) - (a[1][0].orphan ? 1 : 0) || b[1].length - a[1].length)
       .map(([why, list]) => ({ type: "grid", cards: [
         { type: "heading", heading: `${why} (${list.length})`, heading_style: "subtitle" },
         { type: "entities", entities: list.slice(0, MAX).map((e) => ({ entity: e.entity_id, secondary_info: "entity-id" })) },
@@ -980,6 +1014,8 @@ class HomeCockpitUnassignedViewStrategy extends HTMLElement {
       { type: "grid", column_span: 3, cards: [{ type: "heading", heading_style: "title",
         heading: missing.length ? `Nicht zugeordnet (${missing.length})` : "Alles ist zugeordnet ✓" }] },
       ...sections,
+      ...(nSys || nIgn ? [{ type: "grid", column_span: 3, cards: [{ type: "markdown",
+        content: `Nicht gezählt: ${nSys} System-Entitäten (Personen, Automationen, Updates …)${nIgn ? ` · ${nIgn} ignoriert (Regeln im Editor unter „Nicht zugeordnet“)` : ""}` }] }] : []),
     ] };
   }
 }
@@ -1766,6 +1802,12 @@ class HomeCockpitEditor extends HTMLElement {
     const miss = all.filter((e) => e.status === "missing");
     const groups = {};
     miss.forEach((e) => (groups[e.why] = groups[e.why] || []).push(e));
+    const nSys = all.filter((e) => e.status === "system").length;
+    const nIgn = all.filter((e) => e.status === "ignored").length;
+    // Vorschläge für ganze Gruppen: die häufigsten Integrationen und Domänen unter den fehlenden
+    const top = (key) => Object.entries(miss.reduce((o, e) => (e[key] ? (o[e[key]] = (o[e[key]] || 0) + 1, o) : o), {}))
+      .sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const rules = asList(this._cfg.ignore);
     // Knöpfe auf Handseiten, deren Ziel es in diesem Dashboard nicht (mehr) gibt
     const { floors } = buildLayout(this._cfg, this._hass);
     const have = new Set([...pathsOf(this._cfg.views_before), ...pathsOf(this._cfg.views_after),
@@ -1789,8 +1831,21 @@ class HomeCockpitEditor extends HTMLElement {
       ${dead.length ? `<div class="hint warn"><b>${dead.length} Knöpfe führen ins Leere</b> – Ziel gibt es in diesem Dashboard nicht:
         ${dead.map((d) => `<div class="small">Seite ${esc(d.page)} · ${esc(d.name)} → <code>${esc(d.target)}</code></div>`).join("")}
         <div class="small" style="margin-top:4px">Lösung: Seite übernehmen, Etage in „Etagen“ aufnehmen oder unter „Eigene Pfade“ zuordnen (z. B. <code>EG = erdgeschoss</code>).</div></div>` : ""}
-      <div class="hint">Geräte, die mit dem aktuellen (auch ungespeicherten) Bauplan nirgends erscheinen. Lösung: Bereich in HA setzen, Baustein-Regel erweitern oder bewusst weglassen.</div>
-      ${Object.entries(groups).sort((a, b) => b[1].length - a[1].length).map(([why, list]) => `<div>
+      <div class="hint">Geräte, die mit dem aktuellen (auch ungespeicherten) Bauplan nirgends erscheinen. Lösung: Bereich in HA setzen, Baustein-Regel erweitern oder bewusst weglassen.
+        Nicht gezählt: ${nSys} System-Entitäten (Personen, Automationen, Updates …)${nIgn ? `, ${nIgn} ignoriert` : ""}.</div>
+      <div class="col" style="padding:10px">
+        <div class="lbl" style="margin-bottom:4px">Ganze Gruppen ignorieren</div>
+        <div class="small">Zählt dann nicht mehr als „nicht zugeordnet“. Bausteine, die so etwas ausdrücklich zeigen, zeigen es weiter.</div>
+        <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:6px">
+          ${top("platform").map(([v, n]) => `<button class="b mini" data-act="ignoreAdd" data-k="integration" data-v="${esc(v)}">Integration ${esc(v)} (${n})</button>`).join("")}
+          ${top("domain").map(([v, n]) => `<button class="b mini" data-act="ignoreAdd" data-k="domain" data-v="${esc(v)}">Domäne ${esc(v)} (${n})</button>`).join("")}
+        </div>
+        <div class="row" style="margin-top:6px"><input id="ign-word" placeholder="Stichwort, z. B. unifi_wan oder Trend"><button class="b mini" data-act="ignoreWord">Stichwort ignorieren</button></div>
+        ${rules.length ? `<div style="margin-top:6px">${rules.map((g, i) => `<div class="hit"><span>${esc(Object.entries(g).map(([k, v]) => `${CRITERIA_TEXT[k] || k} ${listText(v)}`).join(" + "))}</span>
+          <span class="id">${all.filter((e) => e.status === "ignored" && matchGroup(e, g, this._ctx)).length} Entitäten</span>
+          <button class="b mini" data-act="ignoreDel" data-i="${i}">× wieder zählen</button></div>`).join("")}</div>` : ""}
+      </div>
+      ${Object.entries(groups).sort((a, b) => (b[1][0].orphan ? 1 : 0) - (a[1][0].orphan ? 1 : 0) || b[1].length - a[1].length).map(([why, list]) => `<div>
         <div class="lbl" style="margin:8px 0 4px">${esc(why)} (${list.length})</div>
         ${list.slice(0, 80).map((e) => `<div class="hit"><span>${esc(e.name)}</span><span class="id">${esc(e.entity_id)}</span>
           <button class="b mini" data-act="excludeGlobal" data-e="${esc(e.entity_id)}" title="Nie automatisch zeigen">ignorieren</button></div>`).join("")}
@@ -2034,6 +2089,13 @@ class HomeCockpitEditor extends HTMLElement {
       }
       case "applyImport": this._applyImport(); break;
       case "excludeGlobal": c.exclude = [...asList(c.exclude), d.e]; this._setDirty(); this._renderMain(); break;
+      case "ignoreAdd": c.ignore = [...asList(c.ignore), { [d.k]: d.v }]; this._setDirty(); this._renderMain(); break;
+      case "ignoreWord": {
+        const w = (this._root.querySelector("#ign-word") || {}).value;
+        if (w && w.trim()) { c.ignore = [...asList(c.ignore), { name_contains: w.trim() }]; this._setDirty(); this._renderMain(); }
+        break;
+      }
+      case "ignoreDel": c.ignore = asList(c.ignore).filter((_, i) => i !== +d.i); if (!c.ignore.length) delete c.ignore; this._setDirty(); this._renderMain(); break;
       case "hideHere": { const b = this._block(); b.exclude = [...asList(b.exclude), d.e]; this._setDirty(); this._renderPreview(); break; }
       case "copyRaw": {
         // navigator.clipboard gibt es nur über HTTPS; im Heimnetz (http://…:8123) und in der App

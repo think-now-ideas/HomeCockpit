@@ -1,5 +1,8 @@
 # Änderungen
 
+## 0.3.13 – 15.11.2026
+- Zwei Code-Kommentare nennen einen neutralen Beispielpfad (`/mein-dashboard`) statt eines echten Dashboard-Pfads. Keine Funktionsänderung.
+
 ## 0.3.12 – 15.11.2026
 - Nicht zugeordnet: **Gerätedetails zählen nicht mehr** – Zählerstände (Energie), Strom, Spannung, Leistungsfaktor, Frequenz, Datenrate, Signal, Zeitstempel, Akkustand, Verbindungs-/Eingangszustände sowie Einstellungen (number, select) und Neustart-Tasten. Die Anzahl steht unten. `count_details: true` zählt sie wieder. Verwaiste Einträge bleiben trotzdem in der Aufräumliste.
 - Editor: **„+ Raum-Baustein anlegen“** direkt in jeder Gruppe „kein Baustein passt“ (z. B. Bewässerung, Kamera, Rauchmelder) – danach unter Raum anpassbar

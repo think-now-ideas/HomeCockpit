@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/dark_logo.png">
+    <img src="brand/logo.png" alt="HomeCockpit" width="420">
+  </picture>
+</p>
+
 # HomeCockpit
 
 Dashboard-Strategie für Home Assistant: baut Dashboards **nach Regeln** (Etagen, Bereiche, Labels, Geräteklassen) – mit einem **grafischen Editor** statt YAML.

@@ -1,5 +1,8 @@
 # Änderungen
 
+## 0.3.8 – 15.11.2026
+- Neues Logo: im Editor-Kopf (Schrift passt sich hellem und dunklem Design an), in der README und als Dateien im Ordner `brand/`
+
 ## 0.3.7 – 15.11.2026
 - Hinweistext zu fest übernommenen Seiten: LineGuard heißt jetzt HomeLines
 

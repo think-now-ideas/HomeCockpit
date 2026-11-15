@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.3.12 – 15.11.2026
+- Nicht zugeordnet: **Gerätedetails zählen nicht mehr** – Zählerstände (Energie), Strom, Spannung, Leistungsfaktor, Frequenz, Datenrate, Signal, Zeitstempel, Akkustand, Verbindungs-/Eingangszustände sowie Einstellungen (number, select) und Neustart-Tasten. Die Anzahl steht unten. `count_details: true` zählt sie wieder. Verwaiste Einträge bleiben trotzdem in der Aufräumliste.
+- Editor: **„+ Raum-Baustein anlegen“** direkt in jeder Gruppe „kein Baustein passt“ (z. B. Bewässerung, Kamera, Rauchmelder) – danach unter Raum anpassbar
+- Editor: Bereiche ohne Etage (z. B. ein „geparkt“-Bereich) lassen sich als Ganzes ignorieren
+
 ## 0.3.11 – 15.11.2026
 - Nicht zugeordnet (Editor): Gruppen sind eingeklappt (nur Überschrift mit Anzahl, antippen zum Aufklappen)
 - Neu: „Liste herunterladen“ – alle fehlenden und ignorierten Entitäten als CSV (Grund, Domäne, Geräteklasse, Integration, Bereich, Zustand)

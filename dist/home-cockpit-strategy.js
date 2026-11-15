@@ -1,8 +1,11 @@
 /*
  * HomeCockpit – Dashboard-Strategie für Home Assistant
  * ====================================================
- * Version 0.3.6 · Stand 08.11.2026 · OFFLINE + IM BROWSER MIT TESTDATEN GETESTET,
- * NOCH NICHT IN EINEM ECHTEN HOME ASSISTANT GETESTET.
+ * Version 0.3.9 · Stand 15.11.2026
+ *
+ * Neu in 0.3.9: Home Rhythm (ab 0.9.13) – Räume, die Home Rhythm kennt, bekommen dessen Raumknopf
+ * (`layout: knopf`) und rechts die Raumkarte (`layout: tablet`) mit dem Verlauf des Raumfühlers.
+ * Abschalten mit `home_rhythm: false`. „Nicht zugeordnet“ ohne Reiter über einen Verweis auf der Startseite.
  *
  * Neu in 0.3: feste Seiten im Editor bearbeitbar (Karten verschieben, bearbeiten, hinzufügen),
  * „Automatisch machen“ (Baustein mitten in einer festen Seite: `custom:home-cockpit-block`),
@@ -35,10 +38,10 @@
  *
  * Datenschutz/Sicherheit: Die Strategie liest nur, was das Frontend ohnehin hat
  * (hass.entities, hass.devices, hass.areas, hass.floors, hass.states) plus die Label-Liste
- * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
+ * und ggf. die Raumliste von Home Rhythm per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.8";
+const VERSION = "0.3.9";
 const LOGO = `<svg class="hclogo" aria-label="HomeCockpit" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="10 20 2790 700"><path fill="#00baba" d="M777.09,701.32l-4.58-320.59,159.85,2.4L476.11,27.59,19.86,383.13l131.46,3.42,5.88,315.74L777.09,701.32ZM469.2,409.08h-92.66v-92.66h92.66V409.08ZM469.2,302.61h-92.66v-92.64h92.66V302.61ZM575.67,409.08h-92.65v-92.66h92.65V409.08ZM575.67,302.61h-92.65v-92.64h92.65V302.61Z"/><g fill="#fff" fill-rule="evenodd"><path d="M652.63,653.71h-352.49c-2.67,0-4.83-2.16-4.83-4.83v-186.81c0-2.67,2.16-4.83,4.83-4.83h352.49c2.67,0,4.83,2.16,4.83,4.83v186.81C657.46,651.55,655.3,653.71,652.63,653.71H652.63ZM304.97,644.04h342.83v-177.14h-342.83V644.04Z"/><path d="M447.04,536.29h-99.64c-2.67,0-4.83-2.16-4.83-4.83,0-30.14,24.52-54.66,54.65-54.66s54.66,24.52,54.66,54.66C451.88,534.13,449.71,536.29,447.04,536.29H447.04ZM352.5,526.62h89.45c-2.42-22.54-21.55-40.15-44.72-40.15C374.05,486.47,354.91,504.08,352.5,526.62Z"/><path d="M397.22,500.29c-2.67,0-4.83-2.16-4.83-4.83v-13.82c0-2.67,2.16-4.84,4.83-4.84s4.84,2.17,4.84,4.84v13.82C402.06,498.13,399.89,500.29,397.22,500.29Z"/><path d="M422.68,510.84c-1.24,0-2.48-.47-3.42-1.42-1.89-1.89-1.89-4.95,0-6.83l9.77-9.78c1.89-1.89,4.95-1.89,6.84,0,1.88,1.89,1.88,4.95,0,6.84l-9.78,9.77C425.15,510.37,423.91,510.84,422.68,510.84Z"/><path d="M371.77,510.84c-1.24,0-2.47-.47-3.42-1.42l-9.77-9.77c-1.89-1.89-1.89-4.95,0-6.84,1.89-1.89,4.95-1.89,6.83,0l9.78,9.78c1.89,1.88,1.89,4.94,0,6.83C374.24,510.36,373.01,510.84,371.77,510.84Z"/><path d="M390.22,536.29c-1.24,0-2.48-.47-3.42-1.42-1.89-1.88-1.89-4.94,0-6.83l14.01-14.02c1.89-1.88,4.95-1.88,6.84,0,1.89,1.89,1.89,4.95,0,6.84l-14.02,14.01C392.69,535.82,391.45,536.29,390.22,536.29Z"/><path d="M605.36,536.29h-99.63c-2.67,0-4.84-2.16-4.84-4.83,0-30.14,24.52-54.66,54.66-54.66s54.65,24.52,54.65,54.66C610.2,534.13,608.03,536.29,605.36,536.29H605.36ZM510.82,526.62h89.45c-2.42-22.54-21.55-40.15-44.73-40.15C532.37,486.47,513.24,504.08,510.82,526.62Z"/><path d="M555.55,500.29c-2.67,0-4.84-2.16-4.84-4.83v-13.82c0-2.67,2.17-4.84,4.84-4.84s4.83,2.17,4.83,4.84v13.82C560.38,498.13,558.21,500.29,555.55,500.29Z"/><path d="M581,510.84c-1.24,0-2.47-.47-3.42-1.42-1.88-1.89-1.88-4.95,0-6.83l9.78-9.78c1.88-1.89,4.94-1.89,6.83,0s1.89,4.95,0,6.84l-9.77,9.77C583.47,510.37,582.23,510.84,581,510.84Z"/><path d="M530.09,510.84c-1.24,0-2.47-.47-3.42-1.42l-9.77-9.77c-1.89-1.89-1.89-4.95,0-6.84,1.89-1.89,4.95-1.89,6.83,0l9.78,9.78c1.89,1.88,1.89,4.94,0,6.83C532.57,510.36,531.33,510.84,530.09,510.84Z"/><path d="M562.55,536.29c-1.23,0-2.47-.47-3.41-1.42l-14.02-14.01c-1.89-1.89-1.89-4.95,0-6.84,1.89-1.88,4.95-1.88,6.83,0l14.02,14.02c1.89,1.89,1.89,4.95,0,6.83C565.03,535.82,563.79,536.29,562.55,536.29Z"/><path d="M363.75,634.14c-2.67,0-4.84-2.16-4.84-4.83v-20.8c0-2.66,2.17-4.83,4.84-4.83s4.83,2.17,4.83,4.83v20.8C368.58,631.98,366.41,634.14,363.75,634.14H363.75ZM363.75,580.67c-2.67,0-4.84-2.17-4.84-4.84v-20.79c0-2.67,2.17-4.83,4.84-4.83s4.83,2.16,4.83,4.83v20.79C368.58,578.5,366.41,580.67,363.75,580.67Z"/><path d="M363.75,613.35c-11.68,0-21.18-9.5-21.18-21.18s9.5-21.17,21.18-21.17,21.17,9.5,21.17,21.17S375.42,613.35,363.75,613.35H363.75ZM363.75,580.67c-6.35,0-11.51,5.16-11.51,11.5s5.16,11.51,11.51,11.51,11.5-5.16,11.5-11.51S370.09,580.67,363.75,580.67Z"/><path d="M413.64,634.14c-2.67,0-4.83-2.16-4.83-4.83v-20.8c0-2.66,2.16-4.83,4.83-4.83s4.83,2.17,4.83,4.83v20.8C418.47,631.98,416.31,634.14,413.64,634.14H413.64ZM413.64,580.67c-2.67,0-4.83-2.17-4.83-4.84v-20.79c0-2.67,2.16-4.83,4.83-4.83s4.83,2.16,4.83,4.83v20.79C418.47,578.5,416.31,580.67,413.64,580.67Z"/><path d="M413.64,613.35c-11.67,0-21.17-9.5-21.17-21.18s9.5-21.17,21.17-21.17,21.17,9.5,21.17,21.17S425.31,613.35,413.64,613.35H413.64ZM413.64,580.67c-6.35,0-11.51,5.16-11.51,11.5s5.16,11.51,11.51,11.51,11.51-5.16,11.51-11.51S419.98,580.67,413.64,580.67Z"/><path d="M546.18,583.08h-40.45c-2.67,0-4.84-2.16-4.84-4.83v-23.21c0-2.67,2.17-4.84,4.84-4.84h40.45c2.67,0,4.83,2.17,4.83,4.84v23.21C551.01,580.92,548.85,583.08,546.18,583.08H546.18ZM510.56,573.42h30.79v-13.55h-30.79S510.56,573.42,510.56,573.42Z"/><path d="M605.36,583.08h-40.45c-2.67,0-4.83-2.16-4.83-4.83v-23.21c0-2.67,2.16-4.84,4.83-4.84h40.45c2.67,0,4.84,2.17,4.84,4.84v23.21C610.2,580.92,608.03,583.08,605.36,583.08H605.36ZM569.75,573.42h30.78v-13.55h-30.78S569.75,573.42,569.75,573.42Z"/><path d="M546.18,628.18h-40.45c-2.67,0-4.84-2.17-4.84-4.84v-23.21c0-2.67,2.17-4.83,4.84-4.83h40.45c2.67,0,4.83,2.16,4.83,4.83v23.21C551.01,626.01,548.85,628.18,546.18,628.18H546.18ZM510.56,618.51h30.79v-13.54h-30.79V618.51Z"/><path d="M605.36,628.18h-40.45c-2.67,0-4.83-2.17-4.83-4.84v-23.21c0-2.67,2.16-4.83,4.83-4.83h40.45c2.67,0,4.84,2.16,4.84,4.83v23.21C610.2,626.01,608.03,628.18,605.36,628.18H605.36ZM569.75,618.51h30.78v-13.54h-30.78V618.51Z"/></g><g fill="currentColor"><path d="M859.31,442.82v108.35h135.71v-108.35h17.51v245.88h-17.51v-122.94h-135.71v122.94h-17.51v-245.88H859.31Z"/><path d="M1114.31,692.72c-45.24,0-80.26-35.39-80.26-90.11,0-59.83,39.4-93.03,82.81-93.03,48.52,0,81.35,36.48,81.35,90.11,0,64.94-44.87,93.03-83.54,93.03H1114.31ZM1115.4,678.13c36.48,0,65.3-32.84,65.3-77.71,0-32.1-17.87-76.24-64.2-76.24s-64.94,39.76-64.94,77.34c0,43.77,27.73,76.61,63.48,76.61H1115.4Z"/><path d="M1218.65,555.55c0-16.05-.37-28.09-1.46-41.95h16.41l1.1,30.64h.73c11.31-20.06,28.09-34.66,56.91-34.66,24.07,0,42.68,16.06,50.34,37.94h.73c4.74-10.21,11.31-18.24,17.88-23.71,11.3-9.12,22.98-14.23,41.58-14.23,17.15,0,57.28,9.49,57.28,75.88v103.24h-17.51v-101.78c0-39.4-15.32-62.74-45.6-62.74-21.89,0-39.04,16.41-45.97,34.65-1.46,5.11-2.92,10.95-2.92,17.51v112.36h-17.51v-109.8c0-31.38-14.96-54.72-43.41-54.72-23.35,0-41.95,18.97-48.52,39.4-1.46,5.1-2.55,10.94-2.55,17.14v107.98h-17.51V555.55Z"/><path d="M1496.99,599.33c0,55.81,30.65,78.07,66.76,78.07,25.54,0,38.67-5.11,48.52-9.86l4.38,13.5c-6.57,3.65-24.44,11.31-55.09,11.31-50.34,0-81.71-36.48-81.71-87.92,0-58.37,33.56-94.85,78.8-94.85,57.27,0,68.21,54,68.21,79.17,0,4.74,0,7.29-.73,10.58H1496.99ZM1608.62,585.46c.37-24.44-9.85-61.28-52.16-61.28-38.67,0-55.09,34.29-58.37,61.28H1608.62Z"/><path d="M1837.87,681.41c-10.58,5.11-33.93,10.94-63.84,10.94-78.07,0-125.5-48.88-125.5-123.67,0-80.98,56.55-129.5,131.7-129.5,29.55,0,50.34,5.83,59.46,10.58l-9.48,35.75c-11.68-5.11-28.09-9.49-48.16-9.49-49.98,0-86.09,31.37-86.09,90.47,0,54,31.37,88.29,85.73,88.29,17.87,0,36.84-3.65,48.88-8.76L1837.87,681.41Z"/><path d="M1938.56,692.72c-49.98,0-89.02-34.3-89.02-91.57s38.31-94.12,91.93-94.12,88.29,37.21,88.29,91.2c0,65.3-45.97,94.49-90.84,94.49H1938.56ZM1940.02,660.25c25.53,0,43.41-24.81,43.41-60.92,0-27.73-12.41-59.83-43.05-59.83s-44.51,31.01-44.51,60.56c0,34.29,17.15,60.19,43.78,60.19H1940.02Z"/><path d="M2191.33,683.23c-9.48,4.38-28.09,9.12-50.34,9.12-55.45,0-91.57-35.75-91.57-90.83s36.48-94.49,98.87-94.49c16.41,0,33.19,3.65,43.41,8.03l-8.03,33.92c-7.29-3.64-17.87-6.93-33.93-6.93-34.29,0-54.72,25.17-54.35,57.64,0,36.48,23.71,57.28,54.35,57.28,15.33,0,26.64-3.29,35.39-6.94L2191.33,683.23Z"/><path d="M2260.39,589.11h.73c4.38-6.93,9.49-14.59,13.86-20.79l43.42-57.28h53.99l-66.03,72.6,75.15,105.06h-55.09l-51.07-78.43-14.96,17.88v60.55h-44.87v-259.37h44.87V589.11Z"/><path d="M2398.54,570.14c0-23.35-.73-42.32-1.46-59.1h39.4l2.19,27.36h.73c13.13-20.06,33.93-31.37,60.92-31.37,40.86,0,74.79,35.02,74.79,90.47,0,64.21-40.5,95.22-80.99,95.22-22.25,0-40.86-9.49-49.98-23.72h-.73v91.94h-44.87V570.14ZM2443.41,614.28c0,4.38.37,8.39,1.1,12.41,4.74,18.24,20.43,31.37,39.76,31.37,28.46,0,45.24-23.71,45.24-58.73,0-31.38-15.32-56.91-44.14-56.91-18.61,0-35.76,13.49-40.5,33.19-.73,3.65-1.46,7.66-1.46,11.31V614.28Z"/><path d="M2626.73,485.51c-14.96,0-24.81-10.95-24.81-24.08,0-13.86,10.22-24.44,25.17-24.44s24.81,10.58,25.18,24.44c0,13.13-9.85,24.08-25.18,24.08H2626.73ZM2604.48,688.7v-177.66h44.87v177.66H2604.48Z"/><path d="M2740.22,465.44v45.6h42.68v33.57h-42.68v78.06c0,21.89,5.84,32.84,22.98,32.84,8.03,0,12.41-.37,17.51-1.83l.73,33.93c-6.56,2.55-18.6,4.74-32.46,4.74-16.79,0-30.28-5.47-38.67-14.59-9.85-10.22-14.23-26.63-14.23-49.98v-83.17h-25.17v-33.57h25.17v-33.19L2740.22,465.44Z"/></g></svg>`;
 const LOG = "[home-cockpit]";
 
@@ -126,6 +129,37 @@ async function loadLabels(hass) {
   _labels = map;
   _labelsAt = Date.now();
   return map;
+}
+
+// ---------------------------------------------------------------------------
+// Home Rhythm (ab 0.9.13): welche Bereiche einen Home-Rhythm-Raum haben
+// ---------------------------------------------------------------------------
+
+let _hr = null;
+let _hrAt = 0;
+/** Bereichs-ID → Home-Rhythm-Raum (der erste je Bereich, wie die Karte selbst). {} ohne Home Rhythm. */
+async function loadHomeRhythm(hass) {
+  if (_hr && Date.now() - _hrAt < 30_000) return _hr;
+  const map = {};
+  try {
+    const res = await hass.callWS({ type: "home_rhythm/rooms" });
+    for (const r of asList(res && res.rooms)) if (r && r.area_id && !map[r.area_id]) map[r.area_id] = r;
+  } catch (err) {
+    // nicht installiert oder älter als 0.9.13 → Räume wie bisher (Thermostat-Karten)
+  }
+  _hr = map;
+  _hrAt = Date.now();
+  return map;
+}
+
+/** Home-Rhythm-Raum dieses Bereichs, sofern Home Rhythm genutzt werden soll. */
+const hrRoomFor = (config, hrMap, area) =>
+  (config.home_rhythm === false || !area || !hrMap) ? null : hrMap[area.area_id] || null;
+
+/** Karte für einen Bereich: über `area:` (Home Rhythm sucht den Raum), alte Zuordnung `home_rhythm_rooms` hat Vorrang. */
+function hrCardConf(config, area, layout, extra = {}) {
+  const room = byArea(config.home_rhythm_rooms, area);
+  return { type: "custom:home-rhythm-card", ...(room ? { room } : { area: area.area_id }), layout, ...extra };
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +348,9 @@ function assignBlocks(ents, blocks, ctx, opts = {}) {
       const blockEx = asList(r.block.exclude); // Ausnahmen je Baustein („hier nicht zeigen“)
       let hits = ents.filter((e) => (pass || !claimed.has(e.entity_id)) && !blockEx.includes(e.entity_id)
         && matchBlock(e, r.block, ctx));
-      hits.sort((a, b) => a.name.localeCompare(b.name, "de"));
+      // bevorzugte Entitäten (z. B. Raumfühler aus Home Rhythm) zuerst – wichtig bei `limit`
+      const pref = opts.prefer;
+      hits.sort((a, b) => (pref ? pref.has(b.entity_id) - pref.has(a.entity_id) : 0) || a.name.localeCompare(b.name, "de"));
       if (r.block.limit) hits = hits.slice(0, r.block.limit); // erst begrenzen, dann vergeben
       if (!pass) hits.forEach((e) => claimed.add(e.entity_id));
       r.hits = hits;
@@ -327,10 +363,16 @@ function assignBlocks(ents, blocks, ctx, opts = {}) {
 // Karten bauen
 // ---------------------------------------------------------------------------
 
-/** „Küche Dimmer Schrank“ im Bereich „Küche“ → „Dimmer Schrank“. undefined = HA-Standardname. */
+/**
+ * „Küche Dimmer Schrank“ im Bereich „Küche“ → „Dimmer Schrank“. undefined = HA-Standardname.
+ * Trennzeichen nach dem Bereichsnamen fallen mit weg („Küche-Backofen“ → „Backofen“);
+ * gekürzt wird nur ein ganzes Wort („Bad“ kürzt „Badewanne“ nicht).
+ */
+const NAME_SEP = "\\s\\-–—_:·,/|";
 function shortName(name, areaName, enabled) {
   if (!enabled || !areaName) return undefined;
-  const re = new RegExp("^\\s*" + areaName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*", "i");
+  const re = new RegExp("^[" + NAME_SEP + "]*" + areaName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    + "(?=$|[" + NAME_SEP + "()])[" + NAME_SEP + "]*", "i");
   const s = name.replace(re, "").trim();
   return s && s !== name ? s.charAt(0).toUpperCase() + s.slice(1) : undefined;
 }
@@ -428,9 +470,7 @@ async function buildCards(block, ents, area, config) {
       if (!(await cardAvailable("home-rhythm-card"))) {
         return [{ type: "markdown", content: "⚠️ `home-rhythm-card` ist nicht geladen (Ressourcen prüfen)." }];
       }
-      // Home-Rhythm-Raum-ID ≠ Bereichs-ID möglich → Zuordnung über `home_rhythm_rooms`
-      const room = byArea(config.home_rhythm_rooms, area) || (area && area.area_id);
-      return room ? [{ type: "custom:home-rhythm-card", room, layout: block.layout || "standard", ...extra }] : [];
+      return area ? [hrCardConf(config, area, block.layout || "standard", extra)] : [];
     }
     case "template": {
       const tpl = (config.templates || {})[block.template];
@@ -494,6 +534,38 @@ const claimOrder = (left, right) => [...right.map((_, i) => left.length + i), ..
 function roomBlocks(config) {
   const r = config.room || {};
   return { left: r.left || DEFAULT_ROOM.left, right: r.right || DEFAULT_ROOM.right };
+}
+
+/**
+ * Plant eine Raumseite: welche Entität in welchen Baustein kommt.
+ * Kennt Home Rhythm den Raum (und kein Baustein zeigt schon eine Home-Rhythm-Karte), dann
+ *   - steht rechts oben die Home-Rhythm-Karte,
+ *   - Thermostate des Raums und alles an deren Geräten (z. B. der Fühler im Thermostat) gehören zu ihr,
+ *   - der Verlauf nimmt bevorzugt den Raumfühler aus Home Rhythm – auch wenn er in einem anderen Bereich hängt.
+ * Gemeinsam genutzt von Raumseite, „Nicht zugeordnet“ und Editor-Vorschau.
+ */
+function planRoom(config, area, ctx, all, hr) {
+  const { left, right } = roomBlocks(config);
+  let ents = all.filter((e) => e.area_id === area.area_id && !excludedWhy(e, config));
+  const ownBlock = [...left, ...right].some((b) => b.card === "home-rhythm");
+  let hrClaimed = [], prefer;
+  if (hr && !ownBlock) {
+    const ctl = new Set([...asList(hr.climate_entities), ...asList(hr.ac_entities)]);
+    const sensors = new Set(asList(hr.room_temp_entities));
+    const devs = new Set(all.filter((e) => ctl.has(e.entity_id) && e.device_id).map((e) => e.device_id));
+    const isHr = (e) => !sensors.has(e.entity_id)
+      && (ctl.has(e.entity_id) || e.domain === "climate" || (!!e.device_id && devs.has(e.device_id)));
+    hrClaimed = ents.filter(isHr);
+    ents = ents.filter((e) => !isHr(e));
+    for (const id of sensors) {
+      if (ents.some((e) => e.entity_id === id)) continue;
+      const e = all.find((x) => x.entity_id === id);
+      if (e && !excludedWhy(e, config)) ents.push(e);
+    }
+    prefer = sensors;
+  }
+  const { result } = assignBlocks(ents, [...left, ...right], ctx, { order: claimOrder(left, right), prefer });
+  return { left, right, result, ents, hr: hr && !ownBlock ? hr : null, hrClaimed };
 }
 
 // ---------------------------------------------------------------------------
@@ -561,6 +633,15 @@ async function expandHandView(view, config, hass, ctx) {
   return v;
 }
 
+/** Hängt eine Karte unten an eine Ansicht an – als Kopie, die gespeicherte Konfiguration bleibt unberührt. */
+function appendCard(view, card) {
+  if (!view || view.type === "panel" || view.strategy) return view;
+  if (view.type === "sections" || Array.isArray(view.sections)) {
+    return { ...view, sections: [...asList(view.sections), { type: "grid", column_span: view.max_columns || 4, cards: [card] }] };
+  }
+  return { ...view, cards: [...asList(view.cards), card] };
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard-Strategie: Ansichten-Liste
 // ---------------------------------------------------------------------------
@@ -622,6 +703,18 @@ class HomeCockpitDashboardStrategy extends HTMLElement {
         subview: !tabs, ...(tabs ? {} : { back_path: absPath(config, homePath) }),
         strategy: { type: "custom:home-cockpit-unassigned", parent: config },
       });
+      // Ohne Reiter ist die Unterseite sonst nicht erreichbar → Verweis unten auf der Startseite,
+      // nur für Admins (das Dashboard wird je Benutzer erzeugt) und nur, wenn etwas fehlt.
+      if (!tabs && hass.user && hass.user.is_admin) {
+        let n = 0;
+        try { n = (await explainAll(config, hass)).filter((e) => e.status === "missing").length; }
+        catch (err) { console.warn(LOG, "Nicht zugeordnet: Zählen fehlgeschlagen", err); }
+        const i = Math.max(0, views.findIndex((v) => v && v.path === homePath));
+        if (n && views[i]) views[i] = appendCard(views[i], {
+          type: "heading", heading: `Nicht zugeordnet (${n})`, heading_style: "subtitle", icon: "mdi:help-box-outline",
+          tap_action: { action: "navigate", navigation_path: absPath(config, "nicht-zugeordnet") },
+        });
+      }
     }
 
     // 7. Editor – nur für Admins (das Dashboard wird je Benutzer erzeugt)
@@ -642,14 +735,22 @@ class HomeCockpitDashboardStrategy extends HTMLElement {
 // View-Strategie: Etage → Raumknöpfe
 // ---------------------------------------------------------------------------
 
-/** Leitentität für den Raumknopf: Thermostat, sonst Temperatursensor. */
-function leadEntity(ents, config) {
+/**
+ * Leitentität für den Raumknopf (Räume ohne Home Rhythm): Thermostat, sonst Temperatursensor.
+ * Temperaturen von Messgeräten (Zähler, Zwischenstecker – Geräte mit Leistung/Energie) sind
+ * Gerätetemperaturen, keine Raumtemperatur, und zählen nicht.
+ */
+function leadEntity(ents, config, meterDevices = new Set()) {
   const ok = ents.filter((e) => !excludedWhy(e, config));
   return ok.find((e) => e.domain === "climate" && !e.labels.includes("bt_heizung"))
     || ok.find((e) => e.domain === "climate")
-    || ok.find((e) => e.domain === "sensor" && e.device_class === "temperature")
+    || ok.find((e) => e.domain === "sensor" && e.device_class === "temperature" && !(e.device_id && meterDevices.has(e.device_id)))
     || null;
 }
+
+/** Geräte, die Leistung/Energie/Spannung/Strom messen (Zähler, Zwischenstecker, Relais). */
+const meterDevicesOf = (ents) => new Set(ents.filter((e) => e.domain === "sensor" && e.device_id
+  && ["power", "energy", "voltage", "current"].includes(e.device_class)).map((e) => e.device_id));
 
 class HomeCockpitFloorViewStrategy extends HTMLElement {
   static async generate(config, hass) {
@@ -658,11 +759,23 @@ class HomeCockpitFloorViewStrategy extends HTMLElement {
     const floor = floors.find((f) => f.floor_id === config.floor_id);
     if (!floor) return { type: "sections", sections: [] };
     const ents = collectEntities(hass);
+    const meters = meterDevicesOf(ents);
+    const hrMap = await loadHomeRhythm(hass);
+    const hrCard = Object.keys(hrMap).length && parent.home_rhythm !== false && await cardAvailable("home-rhythm-card");
 
     const roomCards = floor.areas.map((a) => {
       const inArea = ents.filter((e) => e.area_id === a.area_id);
-      const lead = byArea(parent.room_lead, { area_id: a.area_id, name: a.name }) ||
-        (leadEntity(inArea, parent) || {}).entity_id;
+      const fixedLead = byArea(parent.room_lead, { area_id: a.area_id, name: a.name });
+      // Räume, die Home Rhythm kennt: Raumknopf von Home Rhythm (Symbol → Bedien-Fenster, Fläche → Raumseite).
+      // Ein fest eingestellter `room_lead` hat Vorrang.
+      if (hrCard && !fixedLead && hrRoomFor(parent, hrMap, a)) {
+        const areaIcon = ((hass.areas || {})[a.area_id] || {}).icon;
+        return hrCardConf(parent, a, "knopf", {
+          name: a.name, ...(areaIcon ? { icon: areaIcon } : {}),
+          navigation_path: absPath(parent, a.path), grid_options: { columns: 6, rows: 1 },
+        });
+      }
+      const lead = fixedLead || (leadEntity(inArea, parent, meters) || {}).entity_id;
       const nav = { action: "navigate", navigation_path: absPath(parent, a.path) };
       // Kachel zeigt den Zustand der Leitentität (z. B. „Heizen · 21 °C“), Tippen öffnet den Raum
       return lead
@@ -701,17 +814,17 @@ class HomeCockpitRoomViewStrategy extends HTMLElement {
     const area = (hass.areas || {})[config.area_id];
     if (!area) return { type: "sections", sections: [] };
     const ctx = { hass, labels: await loadLabels(hass) };
-    const ents = collectEntities(hass)
-      .filter((e) => e.area_id === area.area_id && !excludedWhy(e, parent));
-
-    const { left, right } = roomBlocks(parent);
+    const hr = hrRoomFor(parent, await loadHomeRhythm(hass), area);
     // Gemeinsam verteilen, damit „erster Treffer gewinnt“ über beide Spalten gilt
-    const { result } = assignBlocks(ents, [...left, ...right], ctx, { order: claimOrder(left, right) });
+    const { left, result, hr: hrUsed } = planRoom(parent, area, ctx, collectEntities(hass), hr);
     const hand = byArea(parent.room_cards, area) || {};
 
     const leftCards = [...asList(hand.before),
       ...(await sectionFromBlocks(result.slice(0, left.length), area, parent))];
-    const rightCards = [
+    const hrCards = !hrUsed ? [] : (await cardAvailable("home-rhythm-card"))
+      ? [hrCardConf(parent, area, "tablet")]
+      : [{ type: "markdown", content: "⚠️ `home-rhythm-card` ist nicht geladen (Ressourcen prüfen)." }];
+    const rightCards = [...hrCards,
       ...(await sectionFromBlocks(result.slice(left.length), area, parent)), ...asList(hand.after)];
 
     const sections = [];
@@ -787,20 +900,24 @@ async function explainAll(config, hass) {
   const onHand = collectEntityIds([config.views_before, config.views_after, config.room_cards]);
   const areaInfo = {};
   floors.forEach((f) => f.areas.forEach((a) => (areaInfo[a.area_id] = { floor: f, area: a })));
-  const { left, right } = roomBlocks(config);
-  const blocks = [...left, ...right];
+  const hrMap = await loadHomeRhythm(hass);
 
   const out = [];
   const all = collectEntities(hass);
   // Je Bereich einmal verteilen (erster Treffer gewinnt) – wie in der Raumseite
   const placed = new Map();
+  const elsewhere = new Map(); // Raumfühler, die in einem anderen Raum als Verlauf erscheinen
   for (const areaId of Object.keys(areaInfo)) {
-    const ents = all.filter((e) => e.area_id === areaId && !excludedWhy(e, config));
-    const { result } = assignBlocks(ents, blocks, ctx, { order: claimOrder(left, right) });
+    if (areaInfo[areaId].area.hand) continue; // Handseite: hier wird nichts erzeugt
+    const area = { area_id: areaId, name: areaInfo[areaId].area.name };
+    const { result, hrClaimed } = planRoom(config, area, ctx, all, hrRoomFor(config, hrMap, area));
+    hrClaimed.forEach((e) => { if (!placed.has(e.entity_id)) placed.set(e.entity_id, "Home-Rhythm-Karte"); });
     result.forEach(({ block, hits }) => hits.forEach((e) => {
-      if (!placed.has(e.entity_id)) placed.set(e.entity_id, block.name);
+      if (e.area_id !== areaId) { if (!elsewhere.has(e.entity_id)) elsewhere.set(e.entity_id, `Seite ${area.name} › ${block.name}`); }
+      else if (!placed.has(e.entity_id)) placed.set(e.entity_id, block.name);
     }));
   }
+  for (const [id, where] of elsewhere) if (!placed.has(id)) placed.set(id, where);
   // Bausteine in festen Seiten
   const handBlocks = [];
   const findBlocks = (n, page) => {
@@ -1260,7 +1377,7 @@ class HomeCockpitEditor extends HTMLElement {
     const pathsText = Object.entries(c.paths || {}).map(([k, v]) => `${k} = ${v}`).join("\n");
     const chk = (f, label, def = true) => `<div class="row"><label><input type="checkbox" data-cfield="${f}" ${(c[f] ?? def) ? "checked" : ""} style="width:auto;min-height:0"> ${label}</label></div>`;
     return `${this._datalists()}<div><div class="small">Generator „je Etage“</div><div style="font-size:20px;font-weight:700">Etagen & Raumknöpfe</div></div>
-      <div class="hint">Je Etage entsteht eine Unterseite mit einem Knopf je Raum (Zustand: Heizung, sonst Temperatur). Jeder Raum bekommt seine Raumseite aus den Raum-Bausteinen.</div>
+      <div class="hint">Je Etage entsteht eine Unterseite mit einem Knopf je Raum (Räume aus Home Rhythm: dessen Raumknopf; sonst Heizung, dann Temperatur). Jeder Raum bekommt seine Raumseite aus den Raum-Bausteinen.</div>
       <div class="row"><label for="c-floors">Etagen</label><input id="c-floors" data-cfield="floors" value="${esc(listText(c.floors))}" placeholder="alle, nach Ebene sortiert" list="dl-floor"></div>
       <div class="row"><label for="c-out">Außen-Bereiche</label><input id="c-out" data-cfield="outside.areas" value="${esc(listText((c.outside || {}).areas))}" placeholder="z. B. Garten, Einfahrt (Bereiche ohne Etage)"></div>
       <div class="row"><label for="c-outn">Name dafür</label><input id="c-outn" data-cfield="outside.name" value="${esc((c.outside || {}).name || "")}" placeholder="Außen"></div>
@@ -1270,7 +1387,8 @@ class HomeCockpitEditor extends HTMLElement {
       <div class="row"><label for="c-cols">Spalten</label><input id="c-cols" type="number" min="1" max="4" data-cfield="max_columns" value="${esc(c.max_columns || 2)}"></div>
       ${chk("shorten_names", "Bereichsnamen im Gerätenamen weglassen")}
       ${chk("floor_openings", "auf der Etage „Offen“ zeigen (nur solange etwas offen ist)")}
-      ${chk("unassigned_view", "Seite „Nicht zugeordnet“ anhängen")}
+      ${chk("unassigned_view", "Seite „Nicht zugeordnet“ anhängen (ohne Reiter: Verweis unten auf der Startseite, nur für Admins)")}
+      ${chk("home_rhythm", "Home Rhythm nutzen: Raumknopf und Raumkarte von Home Rhythm, Verlauf vom Raumfühler (für Räume, die Home Rhythm kennt)")}
       <div><label for="c-paths" class="small">Eigene Pfade (eine Zeile je „Name = pfad“, damit alte Knöpfe weiter funktionieren)</label>
         <textarea id="c-paths" data-cfield="paths">${esc(pathsText)}</textarea></div>`;
   }
@@ -1708,15 +1826,20 @@ class HomeCockpitEditor extends HTMLElement {
       area = (this._hass.areas || {})[this._sampleArea] || null;
       head = `<div class="row"><label for="pv-a">Beispielraum</label><select id="pv-a" data-pv="area">${areas.map((a) =>
         `<option value="${esc(a.area_id)}" ${a.area_id === this._sampleArea ? "selected" : ""}>${esc(a.floor)} · ${esc(a.name)}</option>`).join("")}</select></div>`;
-      const inArea = ents.filter((e) => area && e.area_id === area.area_id);
-      const { left, right } = roomBlocks(cfg);
-      const { result } = assignBlocks(inArea, [...left, ...right], this._ctx, { order: claimOrder(left, right) });
-      const idx = (s.side === "left" ? 0 : left.length) + s.i;
+      const plan = area ? planRoom(cfg, area, this._ctx, collectEntities(this._hass), hrRoomFor(cfg, await loadHomeRhythm(this._hass), area))
+        : { left: [], result: [], ents: [], hr: null, hrClaimed: [] };
+      const inArea = plan.ents;
+      const idx = (s.side === "left" ? 0 : plan.left.length) + s.i;
       const b = this._block();
-      const hits = result[idx] ? result[idx].hits : [];
+      const hits = plan.result[idx] ? plan.result[idx].hits : [];
       const exHits = inArea.filter((e) => asList(b.exclude).includes(e.entity_id) && matchBlock(e, { ...b, exclude: [] }, this._ctx));
       hitsHtml = this._hitList(b, hits, exHits, inArea);
+      if (plan.hr) {
+        hitsHtml = `<div class="hint" style="margin-top:6px">Home Rhythm kennt diesen Raum: rechts oben steht die Home-Rhythm-Karte.
+          Thermostate und ihre Geräte (${plan.hrClaimed.length}) zeigt diese Karte, der Verlauf nimmt den Raumfühler aus Home Rhythm.</div>` + hitsHtml;
+      }
       cards = await sectionFromBlocks([{ block: b, hits }], area, cfg);
+      if (plan.hr && s.side === "right" && s.i === 0) cards.unshift(hrCardConf(cfg, area, "tablet"));
     } else {
       const pg = cfg.pages[s.p];
       const blocks = asList(pg.blocks);
@@ -1823,6 +1946,8 @@ class HomeCockpitEditor extends HTMLElement {
     const rows = [];
     if (s.kind === "hpage" || (s.kind === "hcard" && !b)) rows.push(["Karte", "feste Karte – steht genau so in der Seite"], ["Seite", (this._hview() || {}).title || ""]);
     else if (info.type === "heading") rows.push(["Karte", "Überschrift des Bausteins"]);
+    else if (info.type === "custom:home-rhythm-card" && s.kind === "room") rows.push(["Karte", "Home-Rhythm-Raumkarte – automatisch, weil Home Rhythm diesen Raum kennt"],
+      ["Abschalten", "Etagen & Raumknöpfe › „Home Rhythm nutzen“"]);
     else {
       rows.push(["Ansicht", s.kind === "room" ? "Raumseite (je Bereich)" : s.kind === "hcard" ? `Feste Seite „${(this._hview() || {}).title || ""}“`
         : `Seite „${this._cfg.pages[s.p].title}“`]);

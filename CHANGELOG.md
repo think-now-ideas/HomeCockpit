@@ -1,5 +1,16 @@
 # Änderungen
 
+## 0.3.9 – 15.11.2026
+- **Home Rhythm (ab 0.9.13):** Räume, die Home Rhythm kennt, bekommen
+  - auf der Etagenseite den Raumknopf von Home Rhythm (Symbol → Bedien-Fenster, übrige Fläche → Raumseite),
+  - auf der Raumseite rechts oben die Home-Rhythm-Karte (Format „tablet“) statt der Thermostate; Thermostate und alles an deren Geräten (z. B. der Fühler im Thermostat) gehören zu dieser Karte,
+  - als Verlauf den Raumfühler, den Home Rhythm verwendet – auch wenn er in einem anderen Bereich hängt.
+  - Abschaltbar im Editor unter „Etagen & Raumknöpfe“ (`home_rhythm: false`); ein fest eingestellter `room_lead` hat beim Raumknopf Vorrang. Ohne Home Rhythm bleibt alles wie bisher.
+- **„Nicht zugeordnet“ erreichbar:** Dashboards ohne Reiter bekommen unten auf der Startseite den Verweis „Nicht zugeordnet (N)“ – nur für Admins und nur, wenn etwas fehlt.
+- **Namen kürzen:** Trennzeichen nach dem Bereichsnamen fallen mit weg („Küche-Backofen-Mini“ → „Backofen-Mini“); gekürzt wird nur ein ganzes Wort („Bad“ kürzt „Badewanne“ nicht mehr).
+- **Raumknopf ohne Home Rhythm:** Temperaturen von Messgeräten (Zähler, Zwischenstecker) zählen nicht mehr als Raumtemperatur.
+- Home-Rhythm-Baustein nutzt `area:` statt einer erratenen Raum-ID (`home_rhythm_rooms` gilt weiter, falls gesetzt).
+
 ## 0.3.8 – 15.11.2026
 - Neues Logo: im Editor-Kopf (Schrift passt sich hellem und dunklem Design an), in der README und als Dateien im Ordner `brand/`
 

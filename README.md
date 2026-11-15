@@ -16,6 +16,7 @@ Dashboard-Strategie für Home Assistant: baut Dashboards **nach Regeln** (Etagen
 - **Warum ist diese Karte hier?**, Ausnahmen per Haken, **Nicht zugeordnet** mit Grund
 - **Feste Seiten bearbeiten**: Karten verschieben, duplizieren, bearbeiten, aus anderen Dashboards einfügen – oder mit **„Automatisch machen“** in eine Regel verwandeln
 - Editor-Tab **„HomeCockpit“** nur für Admins, Speichern mit Rückgängig, Hinweis bei veralteter Datei im Browser-Cache
+- Optional mit [Home Rhythm](https://github.com/think-now-ideas/homeRhythm) (ab 0.9.13): Räume, die Home Rhythm kennt, bekommen dessen Raumknopf und Raumkarte, der Verlauf zeigt den Raumfühler. Ohne Home Rhythm gibt es Thermostat-Karten.
 
 > Status: **frühe Testversion (0.3.x)**. Bitte zuerst in einem neuen Test-Dashboard ausprobieren.
 
@@ -39,7 +40,7 @@ Neue Versionen erscheinen in HACS als Update (z. B. „0.3.0 → 0.3.1“). Dana
 - Strategien werden beim Öffnen berechnet; neue Geräte erscheinen automatisch, sobald Bereich/Label stimmen.
 
 ## Datenschutz
-Die Datei liest nur, was das Home-Assistant-Frontend ohnehin hat (Entitäten, Geräte, Bereiche, Etagen, Labels, Dashboards). Sie lädt nichts aus dem Internet und sendet nichts nach außen. Gespeichert wird nur in der Konfiguration des eigenen Dashboards (und eine Sicherung für „Rückgängig“ im Browser).
+Die Datei liest nur, was das Home-Assistant-Frontend ohnehin hat (Entitäten, Geräte, Bereiche, Etagen, Labels, Dashboards, ggf. die Raumliste von Home Rhythm). Sie lädt nichts aus dem Internet und sendet nichts nach außen. Gespeichert wird nur in der Konfiguration des eigenen Dashboards (und eine Sicherung für „Rückgängig“ im Browser).
 
 ## Konzept
 Siehe [docs/KONZEPT.md](docs/KONZEPT.md).

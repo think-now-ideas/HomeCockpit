@@ -38,7 +38,7 @@
  * per Websocket. Sie schreibt nichts, lädt nichts nach und sendet nichts nach außen.
  */
 
-const VERSION = "0.3.6";
+const VERSION = "0.3.7";
 const LOG = "[home-cockpit]";
 
 // ---------------------------------------------------------------------------
@@ -1279,7 +1279,7 @@ class HomeCockpitEditor extends HTMLElement {
       <td style="white-space:nowrap"><button class="b mini" data-act="handMove" data-key="${key}" data-i="${i}">${key === "views_before" ? "nach hinten" : "nach vorne"}</button>
       <button class="b mini danger" data-act="handDel" data-key="${key}" data-i="${i}">entfernen</button></td></tr>`).join("");
     return `<div><div class="small">Feste Seiten</div><div style="font-size:20px;font-weight:700">Start & Handseiten</div></div>
-      <div class="hint">Diese Seiten stehen genau so, wie du sie gebaut hast. Am besten nur für Einzelstücke (Startseite mit Uhr, Kamera, LineGuard). Alles mit „gleiche Karte für viele Geräte“ gehört in Bausteine. Bearbeiten: im alten Dashboard ändern und neu übernehmen.</div>
+      <div class="hint">Diese Seiten stehen genau so, wie du sie gebaut hast. Am besten nur für Einzelstücke (Startseite mit Uhr, Kamera, HomeLines). Alles mit „gleiche Karte für viele Geräte“ gehört in Bausteine. Bearbeiten: im alten Dashboard ändern und neu übernehmen.</div>
       <div class="lbl">Vorne</div><table>${rows("views_before") || `<tr><td class="small">keine</td></tr>`}</table>
       <div class="lbl">Hinten</div><table>${rows("views_after") || `<tr><td class="small">keine</td></tr>`}</table>`;
   }

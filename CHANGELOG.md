@@ -1,5 +1,8 @@
 # Änderungen
 
+## 0.3.7 – 15.11.2026
+- Hinweistext zu fest übernommenen Seiten: LineGuard heißt jetzt HomeLines
+
 ## 0.3.6 – 08.11.2026
 - Verknüpfte Seiten: „Unterseite“ ausschalten wirkt jetzt (vorher galt weiter die Einstellung der Quellseite)
 
